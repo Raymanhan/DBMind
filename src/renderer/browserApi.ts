@@ -61,6 +61,18 @@ export const browserFallbackApi: DbmindApi = {
   async runQuery(_connectionId: string, _sql: string, _database?: string): Promise<QueryResult> {
     throw browserOnlyError();
   },
+  async updateCell() {
+    throw browserOnlyError();
+  },
+  async getTableDesign() {
+    throw browserOnlyError();
+  },
+  async previewTableDesign() {
+    throw browserOnlyError();
+  },
+  async applyTableDesign() {
+    throw browserOnlyError();
+  },
   async getQueryHistory() {
     return [];
   },

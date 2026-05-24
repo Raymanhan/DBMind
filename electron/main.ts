@@ -13,9 +13,14 @@ import type {
   DbConnectionConfig,
   QueryHistoryItem,
   QueryResult,
-  TableSchema
+  TableSchema,
+  UpdateCellRequest,
+  PreviewSqlRequest,
+  ExecuteSqlRequest
 } from '../src/shared/types.js';
 import { addLimitIfSelect, buildSchemaPrompt, localSqlFromPrompt, validateSql } from '../src/shared/sqlTools.js';
+import { updateCell } from './services/dataEditor.js';
+import { applyTableDesign, getTableDesign, previewTableDesign } from './services/tableDesigner.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL) || !app.isPackaged;
@@ -106,7 +111,7 @@ async function writeQueryHistory(history: QueryHistoryItem[]): Promise<QueryHist
   return next;
 }
 
-async function appendQueryHistory(config: DbConnectionConfig, sql: string, result: QueryResult): Promise<void> {
+async function appendQueryHistory(config: DbConnectionConfig, sql: string, result: QueryResult, source: QueryHistoryItem['source'] = 'query'): Promise<void> {
   const history = await readQueryHistory();
   await writeQueryHistory([
     {
@@ -115,6 +120,7 @@ async function appendQueryHistory(config: DbConnectionConfig, sql: string, resul
       connectionName: config.name,
       database: config.database,
       sql,
+      source,
       rowCount: result.rowCount,
       durationMs: result.durationMs,
       createdAt: new Date().toISOString()
@@ -510,6 +516,41 @@ app.whenReady().then(() => {
     getTableDdl(await getConnection(connectionId), tableName)
   );
   ipcMain.handle('db:query', async (_event, connectionId: string, sql: string, database?: string) => runQuery(await getConnection(connectionId), sql, database));
+  ipcMain.handle('db:update-cell', async (_event, request: UpdateCellRequest) => {
+    const config = await getConnection(request.connectionId);
+    const started = performance.now();
+    const response = await updateCell(config, request);
+    if (request.execute && response.ok) {
+      await appendQueryHistory(
+        { ...config, database: request.database },
+        response.sql,
+        { columns: [], rows: [], rowCount: response.affectedRows ?? 0, durationMs: Math.round(performance.now() - started) },
+        'data-edit'
+      );
+    }
+    return response;
+  });
+  ipcMain.handle('db:table-design:get', async (_event, connectionId: string, database: string, table: string) =>
+    getTableDesign(await getConnection(connectionId), database, table)
+  );
+  ipcMain.handle('db:table-design:preview', async (_event, request: PreviewSqlRequest) => {
+    await getConnection(request.connectionId);
+    return previewTableDesign(request.change);
+  });
+  ipcMain.handle('db:table-design:apply', async (_event, request: ExecuteSqlRequest) => {
+    const config = await getConnection(request.connectionId);
+    const started = performance.now();
+    const response = await applyTableDesign(config, request.change, request.sql);
+    if (response.ok && request.sql.trim()) {
+      await appendQueryHistory(
+        { ...config, database: request.change.original.database },
+        request.sql,
+        { columns: [], rows: [], rowCount: 0, durationMs: Math.round(performance.now() - started) },
+        'schema-edit'
+      );
+    }
+    return response;
+  });
   ipcMain.handle('history:list', readQueryHistory);
   ipcMain.handle('history:clear', async () => writeQueryHistory([]));
   ipcMain.handle('settings:get', readSettings);

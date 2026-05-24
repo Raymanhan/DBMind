@@ -31,9 +31,11 @@ import type {
   DbmindApi,
   QueryHistoryItem,
   QueryResult,
-  TableSchema
+  TableSchema,
+  UpdateCellRequest
 } from '../shared/types';
 import { extractTableMentions } from '../shared/sqlTools';
+import { TableDesignerModal } from './components/schema/TableDesigner';
 import { browserFallbackApi } from './browserApi';
 
 type AppView = 'workspace' | 'settings';
@@ -55,8 +57,18 @@ type WorkTab = {
   sql: string;
   result: QueryResult | null;
   resultTab: ResultTab;
-  filters: Record<string, string>;
   sort?: { column: string; direction: 'asc' | 'desc' };
+};
+type PendingCellEdit = {
+  rowIndex: number;
+  column: string;
+  value: string;
+  asNull?: boolean;
+};
+type PendingSqlConfirm = {
+  title: string;
+  sql: string;
+  onConfirm: () => Promise<void>;
 };
 
 const api: DbmindApi = window.dbmind ?? browserFallbackApi;
@@ -117,10 +129,6 @@ function mysqlTableRef(tableName: string, dbName?: string): string {
   return dbName ? `${quoteMysqlIdentifier(dbName)}.${quoteMysqlIdentifier(tableName)}` : quoteMysqlIdentifier(tableName);
 }
 
-function escapeSqlString(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/'/g, "''").replace(/%/g, '\\%').replace(/_/g, '\\_');
-}
-
 function stripTrailingSemicolon(sql: string): string {
   return sql.trim().replace(/;+\s*$/, '');
 }
@@ -134,7 +142,7 @@ function createConsoleTab(): WorkTab {
     sql: seedSql,
     result: null,
     resultTab: 'results',
-    filters: {}
+    sort: undefined
   };
 }
 
@@ -179,6 +187,9 @@ export function App() {
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showDbSelector, setShowDbSelector] = useState(false);
   const [notice, setNotice] = useState('');
+  const [editingCell, setEditingCell] = useState<PendingCellEdit | null>(null);
+  const [pendingSqlConfirm, setPendingSqlConfirm] = useState<PendingSqlConfirm | null>(null);
+  const [tableDesignerTarget, setTableDesignerTarget] = useState<{ database: string; table: string } | null>(null);
 
   const activeConnection = connections.find((connection) => connection.id === activeConnectionId) ?? connections[0];
   const activeWorkTab = workTabs.find((tab) => tab.id === activeWorkTabId) ?? workTabs[0];
@@ -196,6 +207,10 @@ export function App() {
   }, [selectedTable, schemaMap]);
   const mentionedTables = useMemo(() => extractTableMentions(aiInput), [aiInput]);
   const defaultProvider = settings.aiProviders.find((provider) => provider.id === settings.defaultAiProviderId) ?? settings.aiProviders[0];
+  const activeTableSchema = useMemo(() => {
+    if (!activeWorkTab?.dbName || !activeWorkTab.tableName) return undefined;
+    return schemaMap[activeWorkTab.dbName]?.find((table) => table.name === activeWorkTab.tableName);
+  }, [activeWorkTab?.dbName, activeWorkTab?.tableName, schemaMap]);
 
   const dbTreeFiltered = useMemo(() => {
     if (!searchQuery) return null;
@@ -375,25 +390,23 @@ export function App() {
   }
 
   function buildTableBaseSql(table: TableSchema, dbName?: string) {
-    const columns = table.columns.slice(0, 12).map((column) => `  ${quoteMysqlIdentifier(column.name)}`).join(',\n') || '  *';
+    const visibleColumns = table.columns.slice(0, 12);
+    const missingPrimaryColumns = table.columns.filter(
+      (column) => column.primary && !visibleColumns.some((visible) => visible.name === column.name)
+    );
+    const columns = [...visibleColumns, ...missingPrimaryColumns].map((column) => `  ${quoteMysqlIdentifier(column.name)}`).join(',\n') || '  *';
     return `SELECT\n${columns}\nFROM ${mysqlTableRef(table.name, dbName)}`;
   }
 
-  function composeControlledSql(tab: WorkTab, filters = tab.filters, sort = tab.sort) {
-    const activeFilters = Object.entries(filters).filter(([, value]) => value.trim());
-    const conditions = activeFilters.map(([column, value]) => {
-      const pattern = `%${escapeSqlString(value.trim())}%`;
-      return `CAST(${quoteMysqlIdentifier(column)} AS CHAR) LIKE '${pattern}' ESCAPE '\\\\'`;
-    });
-    const whereClause = conditions.length ? `\nWHERE ${conditions.join('\n  AND ')}` : '';
+  function composeSortedSql(tab: WorkTab, sort = tab.sort) {
     const orderClause = sort ? `\nORDER BY ${quoteMysqlIdentifier(sort.column)} ${sort.direction.toUpperCase()}` : '';
 
     if (tab.kind === 'table' && tab.tableName) {
-      return `${stripTrailingSemicolon(tab.baseSql)}${whereClause}${orderClause}\nLIMIT 100;`;
+      return `${stripTrailingSemicolon(tab.baseSql)}${orderClause}\nLIMIT 100;`;
     }
 
     const sourceSql = stripTrailingSemicolon(tab.baseSql || tab.sql);
-    return `SELECT *\nFROM (\n${sourceSql}\n) q${whereClause}${orderClause}\nLIMIT 100;`;
+    return `SELECT *\nFROM (\n${sourceSql}\n) q${orderClause}\nLIMIT 100;`;
   }
 
   function setColumnSort(column: string) {
@@ -405,30 +418,13 @@ export function App() {
         : current?.column === column && current.direction === 'desc'
           ? undefined
           : { column, direction: 'asc' as const };
-    const nextSql = composeControlledSql(activeWorkTab, activeWorkTab.filters, nextSort);
+    const nextSql = composeSortedSql(activeWorkTab, nextSort);
     updateActiveWorkTab({ sort: nextSort, sql: nextSql });
     setNotice(nextSort ? `已按 ${column} ${nextSort.direction === 'asc' ? '升序' : '降序'} 更新 SQL` : `已取消 ${column} 排序`);
-    setTimeout(() => {
-      runWorkTabQuery(activeWorkTabId);
-    }, 0);
+    runWorkTabQuery(activeWorkTabId, nextSql);
   }
 
-  function setColumnFilter(column: string, value: string) {
-    if (!activeWorkTab) return;
-    const filters = { ...activeWorkTab.filters, [column]: value };
-    if (!value.trim()) delete filters[column];
-    const nextSql = composeControlledSql(activeWorkTab, filters, activeWorkTab.sort);
-    updateActiveWorkTab({ filters, sql: nextSql });
-    setNotice(value.trim() ? `已为 ${column} 添加筛选条件` : `已移除 ${column} 筛选条件`);
-  }
-
-  function executeFilterOnEnter(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    runWorkTabQuery();
-  }
-
-  async function runWorkTabQuery(tabId = activeWorkTabId) {
+  async function runWorkTabQuery(tabId = activeWorkTabId, sqlOverride?: string) {
     const tab = workTabs.find((item) => item.id === tabId);
     if (!tab) return;
     if (!activeConnectionId) {
@@ -439,7 +435,7 @@ export function App() {
     setNotice('');
     try {
       const targetDb = tab.dbName ?? (selectedDbs.length === 1 ? selectedDbs[0] : undefined);
-      const data = await api.runQuery(activeConnectionId, tab.sql, targetDb);
+      const data = await api.runQuery(activeConnectionId, sqlOverride ?? tab.sql, targetDb);
       updateWorkTab(tabId, { result: data, resultTab: 'results' });
       api.getQueryHistory().then(setQueryHistory).catch(() => undefined);
       setNotice(`执行完成：${data.rowCount} 行 · ${data.durationMs}ms`);
@@ -469,8 +465,7 @@ export function App() {
           baseSql,
           sql,
           result: null,
-          resultTab: 'results',
-          filters: {}
+          resultTab: 'results'
         }
       ];
     });
@@ -590,7 +585,7 @@ export function App() {
         dialect: activeConnection?.driver ?? 'mysql',
         tables: context
       });
-      updateActiveWorkTab({ baseSql: response.sql, sql: response.sql, filters: {}, sort: undefined });
+      updateActiveWorkTab({ baseSql: response.sql, sql: response.sql, sort: undefined });
       setChat((items) => [
         ...items,
         {
@@ -618,7 +613,7 @@ export function App() {
     }
     const baseSql = buildTableBaseSql(selectedSchema, selectedSchemaDb);
     const nextSql = `${baseSql}\nLIMIT ${limit};`;
-    updateActiveWorkTab({ baseSql, sql: nextSql, filters: {}, sort: undefined });
+    updateActiveWorkTab({ baseSql, sql: nextSql, sort: undefined });
     setNotice(`已生成 ${selectedSchema.name} 的 SELECT 模板`);
   }
 
@@ -628,7 +623,7 @@ export function App() {
       return;
     }
     const nextSql = `SELECT COUNT(*) AS total_count\nFROM ${mysqlTableRef(selectedSchema.name, selectedSchemaDb)};`;
-    updateActiveWorkTab({ baseSql: nextSql, sql: nextSql, filters: {}, sort: undefined });
+    updateActiveWorkTab({ baseSql: nextSql, sql: nextSql, sort: undefined });
     setNotice(`已生成 ${selectedSchema.name} 的 COUNT 模板`);
   }
 
@@ -640,7 +635,7 @@ export function App() {
     try {
       const ddl = await api.getTableDdl(activeConnectionId, selectedSchema.name);
       const nextSql = ddl || `-- 未读取到 ${selectedSchema.name} 的 DDL`;
-      updateActiveWorkTab({ baseSql: nextSql, sql: nextSql, filters: {}, sort: undefined });
+      updateActiveWorkTab({ baseSql: nextSql, sql: nextSql, sort: undefined });
       setNotice(`已读取 ${selectedSchema.name} 的建表 DDL`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'DDL 读取失败');
@@ -653,6 +648,74 @@ export function App() {
       return;
     }
     openTableTab(selectedSchemaDb ?? selectedDbs[0] ?? activeConnection?.database ?? '', selectedSchema);
+  }
+
+  function getCellEditBlockReason(row: Record<string, unknown>, column: string): string | null {
+    if (!activeConnection) return '请先选择连接';
+    if (activeConnection.driver !== 'mysql') return '当前仅 MySQL 支持编辑数据';
+    if (activeConnection.readonly) return '当前连接为只读模式';
+    if (activeWorkTab?.kind !== 'table' || !activeWorkTab.dbName || !activeWorkTab.tableName) return '普通 SQL 结果集暂不支持编辑';
+    if (!activeTableSchema) return '未找到当前表结构';
+    if (activeTableSchema.type === 'view') return '视图暂不支持编辑';
+    const primaryColumns = activeTableSchema.columns.filter((item) => item.primary);
+    if (!primaryColumns.length) return '表没有主键，无法安全定位行';
+    if (primaryColumns.some((item) => !(item.name in row))) return '结果集中缺少主键列，无法安全定位行';
+    if (primaryColumns.some((item) => item.name === column)) return '主键列暂不支持直接编辑';
+    return null;
+  }
+
+  function beginCellEdit(rowIndex: number, row: Record<string, unknown>, column: string) {
+    const reason = getCellEditBlockReason(row, column);
+    if (reason) {
+      setNotice(reason);
+      return;
+    }
+    const value = row[column];
+    setEditingCell({ rowIndex, column, value: value === null || value === undefined ? '' : String(value), asNull: value === null });
+  }
+
+  async function commitCellEdit(edit = editingCell) {
+    if (!edit || !activeResult || !activeWorkTab?.dbName || !activeWorkTab.tableName || !activeTableSchema) return;
+    const row = activeResult.rows[edit.rowIndex];
+    if (!row) return;
+    const reason = getCellEditBlockReason(row, edit.column);
+    if (reason) {
+      setNotice(reason);
+      setEditingCell(null);
+      return;
+    }
+    const primaryKey = Object.fromEntries(activeTableSchema.columns.filter((item) => item.primary).map((item) => [item.name, row[item.name]]));
+    const request: UpdateCellRequest = {
+      connectionId: activeConnectionId,
+      database: activeWorkTab.dbName,
+      table: activeWorkTab.tableName,
+      column: edit.column,
+      primaryKey,
+      value: edit.asNull ? null : edit.value
+    };
+    try {
+      const preview = await api.updateCell(request);
+      setPendingSqlConfirm({
+        title: `确认更新 ${edit.column}`,
+        sql: preview.sql,
+        onConfirm: async () => {
+          setLoadingFlag('query', true);
+          try {
+            const response = await api.updateCell({ ...request, execute: true });
+            setPendingSqlConfirm(null);
+            setEditingCell(null);
+            await runWorkTabQuery(activeWorkTabId);
+            setNotice(`单元格已更新：${response.affectedRows ?? 0} 行受影响`);
+          } catch (error) {
+            setNotice(error instanceof Error ? error.message : '单元格更新失败');
+          } finally {
+            setLoadingFlag('query', false);
+          }
+        }
+      });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '生成更新 SQL 失败');
+    }
   }
 
   function exportResult(format: 'csv' | 'json') {
@@ -980,6 +1043,15 @@ export function App() {
                 <p>{activeConnection ? driverLabel(activeConnection.driver) : 'MySQL'} · {selectedDbs.length} 个数据库 · {allTables.length} 个对象 · {activeWorkTab?.dbName ? `${activeWorkTab.dbName}.${activeWorkTab.tableName}` : defaultProvider ? providerLabel(defaultProvider) : 'Local AI'}</p>
               </div>
               <div className="topbar-actions">
+                {activeWorkTab?.kind === 'table' && activeWorkTab.dbName && activeWorkTab.tableName && (
+                  <button
+                    className="ghost"
+                    onClick={() => setTableDesignerTarget({ database: activeWorkTab.dbName!, table: activeWorkTab.tableName! })}
+                    disabled={loading.query || loading.ai}
+                  >
+                    <Edit3 size={15} /> 表设计
+                  </button>
+                )}
                 <button className="ghost" onClick={generateSql} disabled={loading.ai || loading.query}><Wand2 size={15} /> {loading.ai ? '生成中' : 'AI 优化'}</button>
                 <button className="run-btn" onClick={runQuery} disabled={loading.query || loading.ai}><Play size={16} /> {loading.query ? '执行中' : '执行'}</button>
               </div>
@@ -1016,7 +1088,7 @@ export function App() {
               </div>
               <textarea
                 value={activeSql}
-                onChange={(event) => updateActiveWorkTab({ baseSql: event.target.value, sql: event.target.value, filters: {}, sort: undefined })}
+                onChange={(event) => updateActiveWorkTab({ baseSql: event.target.value, sql: event.target.value, sort: undefined })}
                 spellCheck={false}
               />
             </section>
@@ -1039,7 +1111,7 @@ export function App() {
                   </div>
                 )}
                 {activeResultTab === 'history' ? (
-                  <HistoryPanel history={queryHistory} onUseSql={(nextSql) => updateActiveWorkTab({ baseSql: nextSql, sql: nextSql, filters: {}, sort: undefined })} onClear={clearHistory} />
+                  <HistoryPanel history={queryHistory} onUseSql={(nextSql) => updateActiveWorkTab({ baseSql: nextSql, sql: nextSql, sort: undefined })} onClear={clearHistory} />
                 ) : activeResult ? (
                   <table>
                     <thead>
@@ -1053,24 +1125,55 @@ export function App() {
                           </th>
                         ))}
                       </tr>
-                      <tr className="filter-row">
-                        {activeResult.columns.map((column) => (
-                          <th key={`${column}-filter`}>
-                            <input
-                              value={activeWorkTab?.filters[column] ?? ''}
-                              placeholder="筛选后回车"
-                              onChange={(event) => setColumnFilter(column, event.target.value)}
-                              onKeyDown={executeFilterOnEnter}
-                              onClick={(event) => event.stopPropagation()}
-                            />
-                          </th>
-                        ))}
-                      </tr>
                     </thead>
                     <tbody>
                       {activeResult.rows.map((row, index) => (
                         <tr key={index}>
-                          {activeResult.columns.map((column) => <td key={column}>{formatValue(row[column])}</td>)}
+                          {activeResult.columns.map((column) => {
+                            const reason = getCellEditBlockReason(row, column);
+                            const isEditing = editingCell?.rowIndex === index && editingCell.column === column;
+                            return (
+                              <td
+                                key={column}
+                                className={reason ? 'cell-readonly' : 'cell-editable'}
+                                title={reason ?? '双击编辑，保存前会预览 SQL'}
+                                onDoubleClick={() => beginCellEdit(index, row, column)}
+                              >
+                                {isEditing ? (
+                                  <div className="cell-editor-wrap">
+                                    <input
+                                      className="cell-editor"
+                                      autoFocus
+                                      value={editingCell.value}
+                                      placeholder={editingCell.asNull ? 'NULL' : ''}
+                                      onChange={(event) => setEditingCell({ ...editingCell, value: event.target.value, asNull: false })}
+                                      onBlur={() => commitCellEdit()}
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                          event.preventDefault();
+                                          event.currentTarget.blur();
+                                        }
+                                        if (event.key === 'Escape') {
+                                          event.preventDefault();
+                                          setEditingCell(null);
+                                        }
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onMouseDown={(event) => event.preventDefault()}
+                                      onClick={() => commitCellEdit({ ...editingCell, value: '', asNull: true })}
+                                      title="保存为 NULL"
+                                    >
+                                      NULL
+                                    </button>
+                                  </div>
+                                ) : (
+                                  formatValue(row[column])
+                                )}
+                              </td>
+                            );
+                          })}
                         </tr>
                       ))}
                     </tbody>
@@ -1115,6 +1218,10 @@ export function App() {
             onCountTemplate={insertTableCount}
             onLoadDdl={loadTableDdl}
             onBrowseTable={browseSelectedTable}
+            onDesignTable={() => {
+              if (!selectedSchema) return;
+              setTableDesignerTarget({ database: selectedSchemaDb ?? selectedDbs[0] ?? activeConnection?.database ?? '', table: selectedSchema.name });
+            }}
             onClear={() => setChat([])}
           />
         </>
@@ -1137,6 +1244,43 @@ export function App() {
             />
           </div>
         </div>
+      )}
+
+      {pendingSqlConfirm && (
+        <div className="modal-overlay" onClick={() => setPendingSqlConfirm(null)}>
+          <div className="modal-content sql-confirm-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-head">
+              <h2>{pendingSqlConfirm.title}</h2>
+              <button className="icon-btn" onClick={() => setPendingSqlConfirm(null)}>✕</button>
+            </div>
+            <p className="modal-note">确认后会执行以下写入 SQL，执行成功后自动刷新当前结果集。</p>
+            <pre className="sql-preview">{pendingSqlConfirm.sql}</pre>
+            <div className="form-actions">
+              <button onClick={() => setPendingSqlConfirm(null)}>取消</button>
+              <button className="primary" onClick={pendingSqlConfirm.onConfirm} disabled={loading.query}>
+                <Save size={14} /> {loading.query ? '执行中' : '确认执行'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tableDesignerTarget && activeConnectionId && (
+        <TableDesignerModal
+          api={api}
+          connectionId={activeConnectionId}
+          target={tableDesignerTarget}
+          loading={loading.query}
+          onLoading={(value) => setLoadingFlag('query', value)}
+          onNotice={setNotice}
+          onClose={() => setTableDesignerTarget(null)}
+          onApplied={async () => {
+            await refreshDbSchema(tableDesignerTarget.database);
+            if (activeWorkTab?.kind === 'table' && activeWorkTab.dbName === tableDesignerTarget.database && activeWorkTab.tableName === tableDesignerTarget.table) {
+              await runWorkTabQuery(activeWorkTabId);
+            }
+          }}
+        />
       )}
     </div>
   );
@@ -1232,6 +1376,7 @@ function AiPanel({
   onCountTemplate,
   onLoadDdl,
   onBrowseTable,
+  onDesignTable,
   onClear
 }: {
   selectedSchema?: TableSchema;
@@ -1256,6 +1401,7 @@ function AiPanel({
   onCountTemplate: () => void;
   onLoadDdl: () => void;
   onBrowseTable: () => void;
+  onDesignTable: () => void;
   onClear: () => void;
 }) {
   if (collapsed) {
@@ -1301,6 +1447,7 @@ function AiPanel({
         </div>
         <div className="table-actions">
           <button onClick={onBrowseTable} disabled={!selectedSchema} title="浏览表数据"><Table2 size={13} /> 浏览</button>
+          <button onClick={onDesignTable} disabled={!selectedSchema} title="打开表设计器"><Edit3 size={13} /> 设计</button>
           <button onClick={onSelectTemplate} disabled={!selectedSchema} title="生成 SELECT">SELECT</button>
           <button onClick={onCountTemplate} disabled={!selectedSchema} title="生成 COUNT">COUNT</button>
           <button onClick={onLoadDdl} disabled={!selectedSchema} title="读取 DDL">DDL</button>
@@ -1384,7 +1531,7 @@ function HistoryPanel({
         <button className="history-item" key={item.id} onClick={() => onUseSql(item.sql)}>
           <div>
             <strong>{item.database || item.connectionName}</strong>
-            <span>{new Date(item.createdAt).toLocaleString()} · {item.rowCount} rows · {item.durationMs}ms</span>
+            <span>{new Date(item.createdAt).toLocaleString()} · {item.source ?? 'query'} · {item.rowCount} rows · {item.durationMs}ms</span>
           </div>
           <pre>{item.sql}</pre>
         </button>

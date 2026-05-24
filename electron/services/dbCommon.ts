@@ -1,0 +1,44 @@
+import mysql from 'mysql2/promise';
+import type { DbConnectionConfig, QueryHistoryItem, QueryResult } from '../../src/shared/types.js';
+
+export function mysqlConnectionOptions(config: DbConnectionConfig): mysql.ConnectionOptions {
+  return {
+    host: config.host || 'localhost',
+    port: config.port || 3306,
+    user: config.user,
+    password: config.password,
+    database: config.database || undefined,
+    charset: config.charset || 'utf8mb4',
+    timezone: config.timezone || 'local',
+    connectTimeout: config.connectTimeout || 10000,
+    ssl: config.ssl ? {} : undefined
+  };
+}
+
+export function assertWritableMysql(config: DbConnectionConfig): void {
+  if (config.driver !== 'mysql') throw new Error('当前仅 MySQL 支持编辑。');
+  if (config.readonly) throw new Error('当前连接为只读模式，已阻止写操作。');
+}
+
+export async function appendHistory(
+  config: DbConnectionConfig,
+  sql: string,
+  result: QueryResult,
+  readQueryHistory: () => Promise<QueryHistoryItem[]>,
+  writeQueryHistory: (history: QueryHistoryItem[]) => Promise<QueryHistoryItem[]>
+): Promise<void> {
+  const history = await readQueryHistory();
+  await writeQueryHistory([
+    {
+      id: crypto.randomUUID(),
+      connectionId: config.id,
+      connectionName: config.name,
+      database: config.database,
+      sql,
+      rowCount: result.rowCount,
+      durationMs: result.durationMs,
+      createdAt: new Date().toISOString()
+    },
+    ...history
+  ]);
+}

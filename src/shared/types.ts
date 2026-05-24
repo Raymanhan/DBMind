@@ -51,12 +51,33 @@ export interface QueryResult {
   rowCount: number;
 }
 
+export interface EditableCellContext {
+  connectionId: string;
+  database: string;
+  table: string;
+  column: string;
+  primaryKey: Record<string, unknown>;
+  value: unknown;
+}
+
+export interface UpdateCellRequest extends EditableCellContext {
+  execute?: boolean;
+}
+
+export interface UpdateCellResponse {
+  sql: string;
+  ok: boolean;
+  affectedRows?: number;
+  message?: string;
+}
+
 export interface QueryHistoryItem {
   id: string;
   connectionId: string;
   connectionName: string;
   database?: string;
   sql: string;
+  source?: 'query' | 'data-edit' | 'schema-edit';
   rowCount: number;
   durationMs: number;
   createdAt: string;
@@ -79,6 +100,68 @@ export interface AiGenerateResponse {
 export type AiProviderType = 'openai' | 'openai-compatible' | 'azure-openai' | 'ollama' | 'custom';
 export type AiApiMode = 'responses' | 'chat-completions';
 export type AppTheme = 'dark' | 'light';
+
+export interface TableDesignColumn {
+  name: string;
+  originalName?: string;
+  type: string;
+  nullable: boolean;
+  primary: boolean;
+  autoIncrement?: boolean;
+  defaultValue?: string | null;
+  comment?: string;
+  dropped?: boolean;
+}
+
+export interface TableDesignIndex {
+  name: string;
+  originalName?: string;
+  unique?: boolean;
+  columns: string[];
+  dropped?: boolean;
+}
+
+export interface TableDesignForeignKey {
+  name: string;
+  originalName?: string;
+  columns: string[];
+  referencedTable: string;
+  referencedColumns: string[];
+  onUpdate?: string;
+  onDelete?: string;
+  dropped?: boolean;
+}
+
+export interface TableDesign {
+  database: string;
+  table: string;
+  engine?: string;
+  collation?: string;
+  comment?: string;
+  columns: TableDesignColumn[];
+  indexes: TableDesignIndex[];
+  foreignKeys: TableDesignForeignKey[];
+}
+
+export interface TableDesignChange {
+  original: TableDesign;
+  draft: TableDesign;
+}
+
+export interface PreviewSqlRequest {
+  connectionId: string;
+  change: TableDesignChange;
+}
+
+export interface ExecuteSqlRequest extends PreviewSqlRequest {
+  sql: string;
+}
+
+export interface TableDesignApplyResponse {
+  ok: boolean;
+  sql: string;
+  message?: string;
+}
 
 export interface AiProviderConfig {
   id: string;
@@ -113,6 +196,10 @@ export interface DbmindApi {
   getSchema(connectionId: string, database?: string): Promise<TableSchema[]>;
   getTableDdl(connectionId: string, tableName: string): Promise<string>;
   runQuery(connectionId: string, sql: string, database?: string): Promise<QueryResult>;
+  updateCell(request: UpdateCellRequest): Promise<UpdateCellResponse>;
+  getTableDesign(connectionId: string, database: string, table: string): Promise<TableDesign>;
+  previewTableDesign(request: PreviewSqlRequest): Promise<string>;
+  applyTableDesign(request: ExecuteSqlRequest): Promise<TableDesignApplyResponse>;
   getQueryHistory(): Promise<QueryHistoryItem[]>;
   clearQueryHistory(): Promise<QueryHistoryItem[]>;
   getSettings(): Promise<AppSettings>;
