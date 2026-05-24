@@ -10,6 +10,8 @@ import type {
 import { addLimitIfSelect, localSqlFromPrompt, validateSql } from '../shared/sqlTools';
 
 let settings: AppSettings = {
+  theme: 'dark',
+  selectedDatabasesByConnection: {},
   defaultAiProviderId: 'openai-compatible-default',
   aiProviders: [
     {
@@ -50,13 +52,13 @@ export const browserFallbackApi: DbmindApi = {
   async listDatabases() {
     throw browserOnlyError();
   },
-  async getSchema(): Promise<TableSchema[]> {
+  async getSchema(_connectionId: string, _database?: string): Promise<TableSchema[]> {
     return [];
   },
   async getTableDdl() {
     throw browserOnlyError();
   },
-  async runQuery(): Promise<QueryResult> {
+  async runQuery(_connectionId: string, _sql: string, _database?: string): Promise<QueryResult> {
     throw browserOnlyError();
   },
   async getQueryHistory() {

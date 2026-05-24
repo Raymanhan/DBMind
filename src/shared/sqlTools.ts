@@ -4,17 +4,27 @@ const destructiveWithoutWhere = /\b(delete|update)\b(?![\s\S]*\bwhere\b)/i;
 const destructiveDdl = /\b(drop|truncate|alter)\b/i;
 
 export function extractTableMentions(text: string): string[] {
-  const matches = [...text.matchAll(/@([a-zA-Z_][\w.]*)(?![\w])/g)];
+  const matches = [...text.matchAll(/@([a-zA-Z_][\w.-]*)(?![\w])/g)];
   return [...new Set(matches.map((match) => match[1]))];
 }
 
-export function removeTableMentions(text: string): string {
-  return text.replace(/@([a-zA-Z_][\w.]*)(?![\w])/g, '').replace(/\s+/g, ' ').trim();
+function tableRef(table: TableSchema, dialect: string): string {
+  const quote = dialect === 'postgres'
+    ? (identifier: string) => `"${identifier.replace(/"/g, '""')}"`
+    : (identifier: string) => `\`${identifier.replace(/`/g, '``')}\``;
+  return table.dbName ? `${quote(table.dbName)}.${quote(table.name)}` : quote(table.name);
 }
 
-export function buildSchemaPrompt(tables: TableSchema[]): string {
+export function removeTableMentions(text: string): string {
+  return text.replace(/@([a-zA-Z_][\w.-]*)(?![\w])/g, '').replace(/\s+/g, ' ').trim();
+}
+
+export function buildSchemaPrompt(tables: TableSchema[], dialect = 'mysql'): string {
   return tables
     .map((table) => {
+      const tableLabel = table.dbName
+        ? (dialect === 'postgres' ? `"${table.dbName}"."${table.name}"` : `\`${table.dbName}\`.\`${table.name}\``)
+        : (dialect === 'postgres' ? `"${table.name}"` : `\`${table.name}\``);
       const columns = table.columns
         .map((column: ColumnSchema) => {
           const flags = [column.primary ? 'PK' : '', column.nullable === false ? 'NOT NULL' : '', column.references ? `FK ${column.references}` : '']
@@ -23,7 +33,7 @@ export function buildSchemaPrompt(tables: TableSchema[]): string {
           return `  - ${column.name} ${column.type}${flags ? ` (${flags})` : ''}`;
         })
         .join('\n');
-      return `Table ${table.name}${table.rowCount ? ` (~${table.rowCount} rows)` : ''}\n${columns}`;
+      return `Table ${tableLabel}${table.rowCount ? ` (~${table.rowCount} rows)` : ''}\n${columns}`;
     })
     .join('\n\n');
 }
@@ -42,7 +52,7 @@ export function validateSql(sql: string): string[] {
   return warnings;
 }
 
-export function addLimitIfSelect(sql: string, limit = 1000): string {
+export function addLimitIfSelect(sql: string, limit = 100): string {
   if (!/^\s*select\b/i.test(sql) || /\blimit\s+\d+/i.test(sql)) return sql;
   return `${sql.replace(/;+\s*$/, '')}\nLIMIT ${limit};`;
 }
@@ -73,21 +83,21 @@ export function localSqlFromPrompt(prompt: string, tables: TableSchema[], dialec
     return addLimitIfSelect(`SELECT
   ${dayExpr} AS date,
   SUM(t2.${quantity} * t2.${price}) AS revenue
-FROM ${first.name} t1
-JOIN ${second.name} t2 ON t1.${pk} = t2.${fk}
+FROM ${tableRef(first, dialect)} t1
+JOIN ${tableRef(second, dialect)} t2 ON t1.${pk} = t2.${fk}
 WHERE t1.${dateColumn} >= ${sevenDays}
 GROUP BY date
 ORDER BY date ASC;`);
   }
 
   if (first && /统计|数量|count|多少/i.test(cleanPrompt)) {
-    return `SELECT COUNT(*) AS total_count\nFROM ${first.name};`;
+    return `SELECT COUNT(*) AS total_count\nFROM ${tableRef(first, dialect)};`;
   }
 
   if (first) {
     const columns = first.columns.slice(0, 8).map((column: ColumnSchema) => column.name).join(', ');
-    return `SELECT ${columns || '*'}\nFROM ${first.name}\nLIMIT 100;`;
+    return `SELECT ${columns || '*'}\nFROM ${tableRef(first, dialect)}\nLIMIT 100;`;
   }
 
-  return `SELECT *\nFROM ${tableNames[0] ?? 'your_table'}\nLIMIT 100;`;
+  return `SELECT *\nFROM ${(tables[0] ? tableRef(tables[0], dialect) : tableNames[0]) || 'your_table'}\nLIMIT 100;`;
 }

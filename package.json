@@ -5,9 +5,9 @@
   "main": "dist-electron/electron/main.js",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build:electron": "tsc -p tsconfig.electron.json",
-    "electron:dev": "npm run build:electron && concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "electron:dev": "npm run build:electron && concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "build": "tsc && vite build && npm run build:electron",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit"

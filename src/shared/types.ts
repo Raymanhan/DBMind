@@ -30,7 +30,7 @@ export interface ColumnSchema {
 
 export interface TableSchema {
   name: string;
-  schema?: string;
+  dbName?: string;
   type?: 'table' | 'view';
   rowCount?: number;
   comment?: string;
@@ -78,6 +78,7 @@ export interface AiGenerateResponse {
 
 export type AiProviderType = 'openai' | 'openai-compatible' | 'azure-openai' | 'ollama' | 'custom';
 export type AiApiMode = 'responses' | 'chat-completions';
+export type AppTheme = 'dark' | 'light';
 
 export interface AiProviderConfig {
   id: string;
@@ -99,6 +100,8 @@ export interface AiProviderConfig {
 export interface AppSettings {
   aiProviders: AiProviderConfig[];
   defaultAiProviderId?: string;
+  theme?: AppTheme;
+  selectedDatabasesByConnection?: Record<string, string[]>;
 }
 
 export interface DbmindApi {
@@ -107,9 +110,9 @@ export interface DbmindApi {
   deleteConnection(id: string): Promise<DbConnectionConfig[]>;
   testConnection(config: DbConnectionConfig): Promise<{ ok: boolean; message: string }>;
   listDatabases(config: DbConnectionConfig): Promise<DatabaseInfo[]>;
-  getSchema(connectionId: string): Promise<TableSchema[]>;
+  getSchema(connectionId: string, database?: string): Promise<TableSchema[]>;
   getTableDdl(connectionId: string, tableName: string): Promise<string>;
-  runQuery(connectionId: string, sql: string): Promise<QueryResult>;
+  runQuery(connectionId: string, sql: string, database?: string): Promise<QueryResult>;
   getQueryHistory(): Promise<QueryHistoryItem[]>;
   clearQueryHistory(): Promise<QueryHistoryItem[]>;
   getSettings(): Promise<AppSettings>;

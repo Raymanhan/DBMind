@@ -64,12 +64,16 @@ async function readSettings(): Promise<AppSettings> {
     const providers = parsed.aiProviders?.length ? parsed.aiProviders : [defaultAiProvider];
     return {
       aiProviders: providers,
-      defaultAiProviderId: parsed.defaultAiProviderId ?? providers[0]?.id
+      defaultAiProviderId: parsed.defaultAiProviderId ?? providers[0]?.id,
+      theme: parsed.theme ?? 'dark',
+      selectedDatabasesByConnection: parsed.selectedDatabasesByConnection ?? {}
     };
   } catch {
     return {
       aiProviders: [defaultAiProvider],
-      defaultAiProviderId: defaultAiProvider.id
+      defaultAiProviderId: defaultAiProvider.id,
+      theme: 'dark',
+      selectedDatabasesByConnection: {}
     };
   }
 }
@@ -77,7 +81,9 @@ async function readSettings(): Promise<AppSettings> {
 async function writeSettings(settings: AppSettings): Promise<AppSettings> {
   const next: AppSettings = {
     aiProviders: settings.aiProviders.length ? settings.aiProviders : [defaultAiProvider],
-    defaultAiProviderId: settings.defaultAiProviderId ?? settings.aiProviders[0]?.id ?? defaultAiProvider.id
+    defaultAiProviderId: settings.defaultAiProviderId ?? settings.aiProviders[0]?.id ?? defaultAiProvider.id,
+    theme: settings.theme ?? 'dark',
+    selectedDatabasesByConnection: settings.selectedDatabasesByConnection ?? {}
   };
   await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
   await fs.writeFile(settingsPath(), JSON.stringify(next, null, 2));
@@ -275,13 +281,15 @@ async function testConnection(config: DbConnectionConfig): Promise<{ ok: boolean
   }
 }
 
-async function runQuery(config: DbConnectionConfig, sql: string): Promise<QueryResult> {
+async function runQuery(config: DbConnectionConfig, sql: string, database?: string): Promise<QueryResult> {
+  const targetDb = database || config.database;
+  const resolvedConfig = targetDb ? { ...config, database: targetDb } : config;
   const started = performance.now();
   if (config.driver === 'mysql') {
     if (config.readonly && !/^\s*(select|show|describe|desc|explain)\b/i.test(sql)) {
       throw new Error('当前连接为只读模式，已阻止写操作。');
     }
-    const connection = await mysql.createConnection(mysqlConnectionOptions(config));
+    const connection = await mysql.createConnection(mysqlConnectionOptions(resolvedConfig));
     const [rows, fields] = await connection.query(sql);
     await connection.end();
     const records = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
@@ -291,17 +299,17 @@ async function runQuery(config: DbConnectionConfig, sql: string): Promise<QueryR
       rowCount: records.length,
       durationMs: Math.round(performance.now() - started)
     };
-    await appendQueryHistory(config, sql, result);
+    await appendQueryHistory(resolvedConfig, sql, result);
     return result;
   }
 
   const client = new pg.Client({
-    host: config.host,
-    port: config.port,
-    user: config.user,
-    password: config.password,
-    database: config.database,
-    ssl: config.ssl ? { rejectUnauthorized: false } : undefined
+    host: resolvedConfig.host,
+    port: resolvedConfig.port,
+    user: resolvedConfig.user,
+    password: resolvedConfig.password,
+    database: resolvedConfig.database,
+    ssl: resolvedConfig.ssl ? { rejectUnauthorized: false } : undefined
   });
   await client.connect();
   const result = await client.query(sql);
@@ -312,7 +320,7 @@ async function runQuery(config: DbConnectionConfig, sql: string): Promise<QueryR
     rowCount: result.rowCount ?? result.rows.length,
     durationMs: Math.round(performance.now() - started)
   };
-  await appendQueryHistory(config, sql, queryResult);
+  await appendQueryHistory(resolvedConfig, sql, queryResult);
   return queryResult;
 }
 
@@ -348,12 +356,12 @@ async function callAiProvider(input: AiGenerateRequest, provider: AiProviderConf
   const prompt = `数据库方言：${input.dialect}
 
 Schema:
-${buildSchemaPrompt(input.tables)}
+${buildSchemaPrompt(input.tables, input.dialect)}
 
 用户需求：${input.prompt}`;
 
   const instructions =
-    '你是 DBMind 的 SQL 生成引擎。只返回 JSON：{"sql": "...", "explanation": "..."}。必须只使用给定 schema 中的表和字段。默认生成只读 SELECT，除非用户明确要求写操作且应用配置允许。';
+    '你是 DBMind 的 SQL 生成引擎。只返回 JSON：{"sql": "...", "explanation": "..."}。必须只使用给定 schema 中的表和字段。SQL 中的表名必须与 schema 中给出的完全一致（含反引号引用的库名和表名）。默认生成只读 SELECT，除非用户明确要求写操作且应用配置允许。';
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), provider.timeoutMs ?? 30000);
@@ -464,14 +472,15 @@ function createWindow(): void {
     title: 'DBMind',
     backgroundColor: '#0a0a0f',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false
     }
   });
 
-  if (isDev) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL ?? 'http://127.0.0.1:5173');
+  const devUrl = process.env.VITE_DEV_SERVER_URL;
+  if (isDev && devUrl) {
+    mainWindow.loadURL(devUrl);
   } else {
     mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'));
   }
@@ -493,11 +502,14 @@ app.whenReady().then(() => {
     return testConnection(config);
   });
   ipcMain.handle('db:databases', async (_event, config: DbConnectionConfig) => listDatabases(config));
-  ipcMain.handle('db:schema', async (_event, connectionId: string) => getSchema(await getConnection(connectionId)));
+  ipcMain.handle('db:schema', async (_event, connectionId: string, database?: string) => {
+    const config = await getConnection(connectionId);
+    return getSchema(database ? { ...config, database } : config);
+  });
   ipcMain.handle('db:table-ddl', async (_event, connectionId: string, tableName: string) =>
     getTableDdl(await getConnection(connectionId), tableName)
   );
-  ipcMain.handle('db:query', async (_event, connectionId: string, sql: string) => runQuery(await getConnection(connectionId), sql));
+  ipcMain.handle('db:query', async (_event, connectionId: string, sql: string, database?: string) => runQuery(await getConnection(connectionId), sql, database));
   ipcMain.handle('history:list', readQueryHistory);
   ipcMain.handle('history:clear', async () => writeQueryHistory([]));
   ipcMain.handle('settings:get', readSettings);
