@@ -1,0 +1,173 @@
+import { ChevronDown, Database, Edit3, Plus, RefreshCw, Search, Table2, Trash2 } from 'lucide-react';
+import type { DatabaseInfo, DbConnectionConfig, TableSchema } from '../../../shared/types';
+
+export function Sidebar({
+  activeConnection,
+  activeConnectionId,
+  connections,
+  databases,
+  filteredDatabases,
+  selectedDbs,
+  expandedDbs,
+  searchQuery,
+  dbFilter,
+  showDbSelector,
+  schemaMap,
+  dbTreeFiltered,
+  selectedTable,
+  mentionedTables,
+  sidebarWidth,
+  onSelectConnection,
+  onNewConnection,
+  onEditConnection,
+  onDeleteConnection,
+  onToggleDb,
+  onToggleExpandDb,
+  onToggleDbSelector,
+  onSearchChange,
+  onClearSearch,
+  onDbFilterChange,
+  onClearSelection,
+  onRefreshSchemas,
+  onSelectTable,
+  onOpenTableTab,
+  onStartResize
+}: {
+  activeConnection?: DbConnectionConfig;
+  activeConnectionId: string;
+  connections: DbConnectionConfig[];
+  databases: DatabaseInfo[];
+  filteredDatabases: DatabaseInfo[];
+  selectedDbs: string[];
+  expandedDbs: Set<string>;
+  searchQuery: string;
+  dbFilter: string;
+  showDbSelector: boolean;
+  schemaMap: Record<string, TableSchema[]>;
+  dbTreeFiltered: Record<string, TableSchema[]> | null;
+  selectedTable: string;
+  mentionedTables: string[];
+  sidebarWidth: number;
+  onSelectConnection: (id: string) => void;
+  onNewConnection: () => void;
+  onEditConnection: (c: DbConnectionConfig) => void;
+  onDeleteConnection: (id: string) => void;
+  onToggleDb: (db: string) => void;
+  onToggleExpandDb: (db: string) => void;
+  onToggleDbSelector: () => void;
+  onSearchChange: (v: string) => void;
+  onClearSearch: () => void;
+  onDbFilterChange: (v: string) => void;
+  onClearSelection: () => void;
+  onRefreshSchemas: () => void;
+  onSelectTable: (t: string) => void;
+  onOpenTableTab: (db: string, t: TableSchema) => void;
+  onStartResize: (target: 'sidebar', size: number, e: React.MouseEvent) => void;
+}) {
+  return (
+    <aside className="sidebar">
+      <div className="panel-head">
+        <div>
+          <p>连接</p>
+          <strong>{activeConnection?.name ?? '未连接'}</strong>
+        </div>
+        <button className="icon-btn" title="新建连接" onClick={onNewConnection}><Plus size={16} /></button>
+      </div>
+
+      <div className="connection-list">
+        {connections.length === 0 ? (
+          <button className="sidebar-empty-action" onClick={onNewConnection}>
+            <Plus size={15} />
+            新建连接
+          </button>
+        ) : connections.map((c) => (
+          <div className={`connection-item ${c.id === activeConnectionId ? 'active' : ''}`} key={c.id}>
+            <button className="connection-main" onClick={() => onSelectConnection(c.id)}>
+              <Database size={15} />
+              <span>{c.name}</span>
+              <em>{c.driver === 'postgres' ? 'PostgreSQL' : 'MySQL'}</em>
+            </button>
+            <div className="row-actions">
+              <button title="编辑连接" onClick={() => onEditConnection(c)}><Edit3 size={13} /></button>
+              <button title="删除连接" onClick={() => onDeleteConnection(c.id)}><Trash2 size={13} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="object-browser">
+        <div className="section-title-row">
+          <div className="section-label">对象</div>
+        </div>
+        {activeConnection?.driver === 'mysql' && databases.length > 0 && (
+          <div className="db-multi-select">
+            <button className="db-selector-head" onClick={onToggleDbSelector}>
+              <ChevronDown size={14} className={`tree-chevron ${showDbSelector ? '' : 'open'}`} />
+              <Database size={14} />
+              <span>{selectedDbs.length ? `已选 ${selectedDbs.length} 个库` : '选择数据库'}</span>
+              <span className="tiny-btn" onClick={(e) => { e.stopPropagation(); onRefreshSchemas(); }} title="刷新 Schema"><RefreshCw size={13} /></span>
+            </button>
+            {selectedDbs.length > 0 && !showDbSelector && (
+              <div className="db-selected-chips">
+                {selectedDbs.slice(0, 3).map((db) => <span key={db}>{db}</span>)}
+                {selectedDbs.length > 3 && <em>+{selectedDbs.length - 3}</em>}
+              </div>
+            )}
+            {showDbSelector && (
+              <div className="db-multi-dropdown">
+                <div className="db-filter">
+                  <Search size={13} />
+                  <input placeholder="筛选数据库" value={dbFilter} onChange={(e) => onDbFilterChange(e.target.value)} onClick={(e) => e.stopPropagation()} />
+                  {selectedDbs.length > 0 && <button onClick={onClearSelection}>清空</button>}
+                </div>
+                <div className="db-option-list">
+                  {filteredDatabases.map((db) => (
+                    <label key={db.name} className="db-check-row">
+                      <input type="checkbox" checked={selectedDbs.includes(db.name)} onChange={() => onToggleDb(db.name)} />
+                      <span>{db.system ? `${db.name} · system` : db.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="searchbox">
+          <Search size={14} />
+          <input placeholder="搜索对象" value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} onClick={(e) => e.stopPropagation()} />
+          {searchQuery && <button className="search-clear" onClick={onClearSearch}>✕</button>}
+        </div>
+        {selectedDbs.length === 0 && !searchQuery && (
+          <div className="tree-empty">{activeConnection ? '选择数据库以浏览对象' : '先新建连接'}</div>
+        )}
+        {selectedDbs.map((dbName) => {
+          const tables = searchQuery ? (dbTreeFiltered?.[dbName] ?? []) : schemaMap[dbName];
+          if (!tables || tables.length === 0) return null;
+          return (
+            <div key={dbName} className="tree-group">
+              <button className="tree-group-head db-root" onClick={() => onToggleExpandDb(dbName)}>
+                <ChevronDown size={14} className={`tree-chevron ${expandedDbs.has(dbName) ? '' : 'open'}`} />
+                <Database size={14} />
+                <span>{dbName}</span>
+                <em>{tables.length}</em>
+              </button>
+              {expandedDbs.has(dbName) && tables.map((t) => (
+                <button
+                  className={`table-item ${t.name === selectedTable ? 'active' : ''} ${mentionedTables.includes(t.name) ? 'mentioned' : ''}`}
+                  key={t.name}
+                  onClick={() => onSelectTable(t.name)}
+                  onDoubleClick={() => onOpenTableTab(dbName, t)}
+                >
+                  <Table2 size={15} />
+                  <span>{t.name}</span>
+                  <em>{t.columns.length}</em>
+                </button>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+      <div className="resize-handle-col" onMouseDown={(e) => onStartResize('sidebar', sidebarWidth, e)} />
+    </aside>
+  );
+}
