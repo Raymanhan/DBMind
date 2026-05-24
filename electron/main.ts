@@ -9,6 +9,7 @@ import type {
   AiGenerateResponse,
   AiProviderConfig,
   AppSettings,
+  BatchUpdateCellRequest,
   DatabaseInfo,
   DbConnectionConfig,
   QueryHistoryItem,
@@ -19,7 +20,7 @@ import type {
   ExecuteSqlRequest
 } from '../src/shared/types.js';
 import { addLimitIfSelect, buildSchemaPrompt, localSqlFromPrompt, validateSql } from '../src/shared/sqlTools.js';
-import { updateCell } from './services/dataEditor.js';
+import { updateCell, updateCellsBatch } from './services/dataEditor.js';
 import { applyTableDesign, getTableDesign, previewTableDesign } from './services/tableDesigner.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -524,6 +525,20 @@ app.whenReady().then(() => {
       await appendQueryHistory(
         { ...config, database: request.database },
         response.sql,
+        { columns: [], rows: [], rowCount: response.affectedRows ?? 0, durationMs: Math.round(performance.now() - started) },
+        'data-edit'
+      );
+    }
+    return response;
+  });
+  ipcMain.handle('db:update-cells-batch', async (_event, request: BatchUpdateCellRequest) => {
+    const config = await getConnection(request.connectionId);
+    const started = performance.now();
+    const response = await updateCellsBatch(config, request);
+    if (request.execute && response.ok) {
+      await appendQueryHistory(
+        { ...config, database: request.database },
+        response.sqls.join('\n'),
         { columns: [], rows: [], rowCount: response.affectedRows ?? 0, durationMs: Math.round(performance.now() - started) },
         'data-edit'
       );

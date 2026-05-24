@@ -71,6 +71,26 @@ export interface UpdateCellResponse {
   message?: string;
 }
 
+export interface BatchCellEditEntry {
+  column: string;
+  primaryKey: Record<string, unknown>;
+  value: unknown;
+}
+
+export interface BatchUpdateCellRequest {
+  connectionId: string;
+  database: string;
+  table: string;
+  edits: BatchCellEditEntry[];
+  execute?: boolean;
+}
+
+export interface BatchUpdateCellResponse {
+  sqls: string[];
+  ok: boolean;
+  affectedRows?: number;
+}
+
 export interface QueryHistoryItem {
   id: string;
   connectionId: string;
@@ -197,6 +217,7 @@ export interface DbmindApi {
   getTableDdl(connectionId: string, tableName: string): Promise<string>;
   runQuery(connectionId: string, sql: string, database?: string): Promise<QueryResult>;
   updateCell(request: UpdateCellRequest): Promise<UpdateCellResponse>;
+  updateCellsBatch(request: BatchUpdateCellRequest): Promise<BatchUpdateCellResponse>;
   getTableDesign(connectionId: string, database: string, table: string): Promise<TableDesign>;
   previewTableDesign(request: PreviewSqlRequest): Promise<string>;
   applyTableDesign(request: ExecuteSqlRequest): Promise<TableDesignApplyResponse>;

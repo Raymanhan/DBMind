@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AiGenerateRequest, AiProviderConfig, AppSettings, DbConnectionConfig, DbmindApi, ExecuteSqlRequest, PreviewSqlRequest, UpdateCellRequest } from '../src/shared/types.js';
+import type { AiGenerateRequest, AiProviderConfig, AppSettings, BatchUpdateCellRequest, DbConnectionConfig, DbmindApi, ExecuteSqlRequest, PreviewSqlRequest, UpdateCellRequest } from '../src/shared/types.js';
 
 const api: DbmindApi = {
   getConnections: () => ipcRenderer.invoke('connections:list'),
@@ -11,6 +11,7 @@ const api: DbmindApi = {
   getTableDdl: (connectionId: string, tableName: string) => ipcRenderer.invoke('db:table-ddl', connectionId, tableName),
   runQuery: (connectionId: string, sql: string, database?: string) => ipcRenderer.invoke('db:query', connectionId, sql, database),
   updateCell: (request: UpdateCellRequest) => ipcRenderer.invoke('db:update-cell', request),
+  updateCellsBatch: (request: BatchUpdateCellRequest) => ipcRenderer.invoke('db:update-cells-batch', request),
   getTableDesign: (connectionId: string, database: string, table: string) => ipcRenderer.invoke('db:table-design:get', connectionId, database, table),
   previewTableDesign: (request: PreviewSqlRequest) => ipcRenderer.invoke('db:table-design:preview', request),
   applyTableDesign: (request: ExecuteSqlRequest) => ipcRenderer.invoke('db:table-design:apply', request),

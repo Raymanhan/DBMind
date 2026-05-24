@@ -26,16 +26,18 @@ import type {
   AiProviderConfig,
   AppSettings,
   AppTheme,
+  BatchCellEditEntry,
+  BatchUpdateCellRequest,
   DatabaseInfo,
   DbConnectionConfig,
   DbmindApi,
   QueryHistoryItem,
   QueryResult,
-  TableSchema,
-  UpdateCellRequest
+  TableSchema
 } from '../shared/types';
 import { extractTableMentions } from '../shared/sqlTools';
 import { TableDesignerModal } from './components/schema/TableDesigner';
+import { SqlEditor } from './components/editor/SqlEditor';
 import { browserFallbackApi } from './browserApi';
 
 type AppView = 'workspace' | 'settings';
@@ -59,11 +61,12 @@ type WorkTab = {
   resultTab: ResultTab;
   sort?: { column: string; direction: 'asc' | 'desc' };
 };
-type PendingCellEdit = {
+type BatchCellEdit = {
   rowIndex: number;
   column: string;
-  value: string;
-  asNull?: boolean;
+  newValue: string;
+  originalValue: string;
+  asNull: boolean;
 };
 type PendingSqlConfirm = {
   title: string;
@@ -107,8 +110,19 @@ const emptyAiProvider: AiProviderConfig = {
   appendLimit: true
 };
 
+function formatDatetime(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mi = String(date.getMinutes()).padStart(2, '0');
+  const ss = String(date.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+}
+
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return 'NULL';
+  if (value instanceof Date) return formatDatetime(value);
   if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(2);
   return String(value);
 }
@@ -187,7 +201,8 @@ export function App() {
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showDbSelector, setShowDbSelector] = useState(false);
   const [notice, setNotice] = useState('');
-  const [editingCell, setEditingCell] = useState<PendingCellEdit | null>(null);
+  const [activeInlineEditor, setActiveInlineEditor] = useState<{ rowIndex: number; column: string; value: string; asNull: boolean } | null>(null);
+  const [pendingEdits, setPendingEdits] = useState<BatchCellEdit[]>([]);
   const [pendingSqlConfirm, setPendingSqlConfirm] = useState<PendingSqlConfirm | null>(null);
   const [tableDesignerTarget, setTableDesignerTarget] = useState<{ database: string; table: string } | null>(null);
 
@@ -211,6 +226,13 @@ export function App() {
     if (!activeWorkTab?.dbName || !activeWorkTab.tableName) return undefined;
     return schemaMap[activeWorkTab.dbName]?.find((table) => table.name === activeWorkTab.tableName);
   }, [activeWorkTab?.dbName, activeWorkTab?.tableName, schemaMap]);
+  const pendingEditsMap = useMemo(() => {
+    const map = new Map<string, BatchCellEdit>();
+    for (const edit of pendingEdits) {
+      map.set(`${edit.rowIndex}:${edit.column}`, edit);
+    }
+    return map;
+  }, [pendingEdits]);
 
   const dbTreeFiltered = useMemo(() => {
     if (!searchQuery) return null;
@@ -312,6 +334,11 @@ export function App() {
     setWorkTabs([createConsoleTab()]);
     setActiveWorkTabId('console');
   }, [activeConnectionId]);
+
+  useEffect(() => {
+    setPendingEdits([]);
+    setActiveInlineEditor(null);
+  }, [activeWorkTabId]);
 
   useEffect(() => {
     if (!activeConnection || activeConnection.driver !== 'mysql') {
@@ -431,6 +458,8 @@ export function App() {
       setNotice('请先保存并选择一个数据库连接。');
       return;
     }
+    setPendingEdits([]);
+    setActiveInlineEditor(null);
     setLoadingFlag('query', true);
     setNotice('');
     try {
@@ -670,51 +699,84 @@ export function App() {
       setNotice(reason);
       return;
     }
-    const value = row[column];
-    setEditingCell({ rowIndex, column, value: value === null || value === undefined ? '' : String(value), asNull: value === null });
+    const existing = pendingEditsMap.get(`${rowIndex}:${column}`);
+    const rawValue = existing ? existing.newValue : row[column];
+    const asNull = existing ? existing.asNull : rawValue === null || rawValue === undefined;
+    setActiveInlineEditor({
+      rowIndex,
+      column,
+      value: (asNull && !existing) ? '' : (rawValue === null || rawValue === undefined ? '' : rawValue instanceof Date ? formatDatetime(rawValue) : String(rawValue)),
+      asNull
+    });
   }
 
-  async function commitCellEdit(edit = editingCell) {
-    if (!edit || !activeResult || !activeWorkTab?.dbName || !activeWorkTab.tableName || !activeTableSchema) return;
-    const row = activeResult.rows[edit.rowIndex];
+  function finishCellEdit(editorState: { rowIndex: number; column: string; value: string; asNull: boolean }) {
+    if (!activeResult || !activeWorkTab?.dbName || !activeWorkTab.tableName || !activeTableSchema) return;
+    const row = activeResult.rows[editorState.rowIndex];
     if (!row) return;
-    const reason = getCellEditBlockReason(row, edit.column);
-    if (reason) {
-      setNotice(reason);
-      setEditingCell(null);
-      return;
+    const rawValue = row[editorState.column];
+    const originalValue = rawValue === null || rawValue === undefined ? '' : rawValue instanceof Date ? formatDatetime(rawValue) : String(rawValue);
+    const newValue = editorState.asNull ? '' : editorState.value;
+
+    setPendingEdits((prev) => {
+      const filtered = prev.filter((e) => !(e.rowIndex === editorState.rowIndex && e.column === editorState.column));
+      if (editorState.asNull && rawValue === null) return filtered;
+      if (!editorState.asNull && newValue === originalValue) return filtered;
+      return [...filtered, { rowIndex: editorState.rowIndex, column: editorState.column, newValue, originalValue, asNull: editorState.asNull }];
+    });
+    setActiveInlineEditor(null);
+  }
+
+  function undoEdit(rowIndex: number, column: string) {
+    setPendingEdits((prev) => prev.filter((e) => !(e.rowIndex === rowIndex && e.column === column)));
+  }
+
+  function undoAllEdits() {
+    setPendingEdits([]);
+  }
+
+  async function saveBatchEdits() {
+    if (!pendingEdits.length || !activeResult || !activeWorkTab?.dbName || !activeWorkTab.tableName || !activeTableSchema) return;
+
+    const edits: BatchCellEditEntry[] = [];
+    for (const edit of pendingEdits) {
+      const row = activeResult.rows[edit.rowIndex];
+      if (!row) continue;
+      const primaryKey = Object.fromEntries(
+        activeTableSchema.columns.filter((c) => c.primary).map((c) => [c.name, row[c.name]])
+      );
+      edits.push({ column: edit.column, primaryKey, value: edit.asNull ? null : edit.newValue });
     }
-    const primaryKey = Object.fromEntries(activeTableSchema.columns.filter((item) => item.primary).map((item) => [item.name, row[item.name]]));
-    const request: UpdateCellRequest = {
+
+    const request: BatchUpdateCellRequest = {
       connectionId: activeConnectionId,
       database: activeWorkTab.dbName,
       table: activeWorkTab.tableName,
-      column: edit.column,
-      primaryKey,
-      value: edit.asNull ? null : edit.value
+      edits
     };
+
     try {
-      const preview = await api.updateCell(request);
+      const preview = await api.updateCellsBatch(request);
       setPendingSqlConfirm({
-        title: `确认更新 ${edit.column}`,
-        sql: preview.sql,
+        title: `批量更新确认 · ${edits.length} 处修改`,
+        sql: preview.sqls.join('\n'),
         onConfirm: async () => {
           setLoadingFlag('query', true);
           try {
-            const response = await api.updateCell({ ...request, execute: true });
+            const response = await api.updateCellsBatch({ ...request, execute: true });
             setPendingSqlConfirm(null);
-            setEditingCell(null);
+            setPendingEdits([]);
             await runWorkTabQuery(activeWorkTabId);
-            setNotice(`单元格已更新：${response.affectedRows ?? 0} 行受影响`);
+            setNotice(`批量更新完成：${response.affectedRows ?? 0} 行受影响`);
           } catch (error) {
-            setNotice(error instanceof Error ? error.message : '单元格更新失败');
+            setNotice(error instanceof Error ? error.message : '批量更新失败');
           } finally {
             setLoadingFlag('query', false);
           }
         }
       });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '生成更新 SQL 失败');
+      setNotice(error instanceof Error ? error.message : '生成批量更新 SQL 失败');
     }
   }
 
@@ -1086,10 +1148,12 @@ export function App() {
                 <span>{activeWorkTab?.kind === 'table' && activeWorkTab.dbName ? `${activeWorkTab.dbName}.${activeWorkTab.tableName}` : 'SQL Console'}</span>
                 <span>{notice || 'Ready'}</span>
               </div>
-              <textarea
+              <SqlEditor
                 value={activeSql}
-                onChange={(event) => updateActiveWorkTab({ baseSql: event.target.value, sql: event.target.value, sort: undefined })}
-                spellCheck={false}
+                onChange={(newValue) => updateActiveWorkTab({ baseSql: newValue, sql: newValue, sort: undefined })}
+                schemaMap={schemaMap}
+                selectedDbs={selectedDbs}
+                currentDb={activeWorkTab?.dbName ?? (selectedDbs.length === 1 ? selectedDbs[0] : undefined)}
               />
             </section>
 
@@ -1103,6 +1167,41 @@ export function App() {
                 <button onClick={() => exportResult('json')}>JSON</button>
                 <span>{activeResult ? `${activeResult.rowCount} rows · ${activeResult.durationMs}ms` : '尚未执行'}</span>
               </div>
+              {pendingEdits.length > 0 && activeResultTab === 'results' && (
+                <div className="batch-edit-toolbar">
+                  <div className="batch-edit-header">
+                    <span className="batch-edit-count">
+                      <Edit3 size={14} />
+                      {pendingEdits.length} 处修改
+                    </span>
+                    <div className="batch-edit-header-actions">
+                      <button className="ghost" onClick={undoAllEdits} title="撤销所有修改">
+                        <Trash2 size={13} /> 全部撤销
+                      </button>
+                      <button className="primary" onClick={saveBatchEdits} disabled={loading.query}>
+                        <Save size={14} /> {loading.query ? '保存中' : '保存'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="batch-edit-list">
+                    {pendingEdits.map((edit) => (
+                      <div className="batch-edit-item" key={`${edit.rowIndex}:${edit.column}`}>
+                        <span className="batch-edit-col">{edit.column}</span>
+                        <span className="batch-edit-old">{edit.originalValue || 'NULL'}</span>
+                        <span className="batch-edit-arrow">&rarr;</span>
+                        <span className="batch-edit-new">{edit.asNull ? 'NULL' : edit.newValue}</span>
+                        <button
+                          className="batch-edit-undo"
+                          onClick={() => undoEdit(edit.rowIndex, edit.column)}
+                          title="撤销此修改"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="table-wrap">
                 {loading.query && (
                   <div className="loading-overlay">
@@ -1131,23 +1230,33 @@ export function App() {
                         <tr key={index}>
                           {activeResult.columns.map((column) => {
                             const reason = getCellEditBlockReason(row, column);
-                            const isEditing = editingCell?.rowIndex === index && editingCell.column === column;
+                            const isInlineEditing = activeInlineEditor?.rowIndex === index && activeInlineEditor.column === column;
+                            const pendingKey = `${index}:${column}`;
+                            const pendingEdit = pendingEditsMap.get(pendingKey);
+                            const tdClass = [
+                              reason ? 'cell-readonly' : 'cell-editable',
+                              pendingEdit ? 'cell-edited' : ''
+                            ].filter(Boolean).join(' ');
+                            const displayValue = pendingEdit
+                              ? (pendingEdit.asNull ? 'NULL' : pendingEdit.newValue)
+                              : formatValue(row[column]);
+                            const isNullDisplay = pendingEdit?.asNull;
                             return (
                               <td
                                 key={column}
-                                className={reason ? 'cell-readonly' : 'cell-editable'}
-                                title={reason ?? '双击编辑，保存前会预览 SQL'}
+                                className={tdClass}
+                                title={reason ?? (pendingEdit ? '已修改，双击重新编辑' : '双击编辑')}
                                 onDoubleClick={() => beginCellEdit(index, row, column)}
                               >
-                                {isEditing ? (
+                                {isInlineEditing ? (
                                   <div className="cell-editor-wrap">
                                     <input
                                       className="cell-editor"
                                       autoFocus
-                                      value={editingCell.value}
-                                      placeholder={editingCell.asNull ? 'NULL' : ''}
-                                      onChange={(event) => setEditingCell({ ...editingCell, value: event.target.value, asNull: false })}
-                                      onBlur={() => commitCellEdit()}
+                                      value={activeInlineEditor!.value}
+                                      placeholder={activeInlineEditor!.asNull ? 'NULL' : ''}
+                                      onChange={(event) => setActiveInlineEditor({ ...activeInlineEditor!, value: event.target.value, asNull: false })}
+                                      onBlur={() => finishCellEdit(activeInlineEditor!)}
                                       onKeyDown={(event) => {
                                         if (event.key === 'Enter') {
                                           event.preventDefault();
@@ -1155,21 +1264,21 @@ export function App() {
                                         }
                                         if (event.key === 'Escape') {
                                           event.preventDefault();
-                                          setEditingCell(null);
+                                          setActiveInlineEditor(null);
                                         }
                                       }}
                                     />
                                     <button
                                       type="button"
                                       onMouseDown={(event) => event.preventDefault()}
-                                      onClick={() => commitCellEdit({ ...editingCell, value: '', asNull: true })}
+                                      onClick={() => finishCellEdit({ ...activeInlineEditor!, value: '', asNull: true })}
                                       title="保存为 NULL"
                                     >
                                       NULL
                                     </button>
                                   </div>
                                 ) : (
-                                  formatValue(row[column])
+                                  <span className={isNullDisplay ? 'cell-edited-null' : ''}>{displayValue}</span>
                                 )}
                               </td>
                             );

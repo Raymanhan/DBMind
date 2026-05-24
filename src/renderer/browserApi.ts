@@ -64,6 +64,9 @@ export const browserFallbackApi: DbmindApi = {
   async updateCell() {
     throw browserOnlyError();
   },
+  async updateCellsBatch() {
+    throw browserOnlyError();
+  },
   async getTableDesign() {
     throw browserOnlyError();
   },

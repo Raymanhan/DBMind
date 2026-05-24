@@ -1,5 +1,5 @@
 import mysql from 'mysql2/promise';
-import type { DbConnectionConfig, UpdateCellRequest, UpdateCellResponse } from '../../src/shared/types.js';
+import type { BatchUpdateCellRequest, BatchUpdateCellResponse, DbConnectionConfig, UpdateCellRequest, UpdateCellResponse } from '../../src/shared/types.js';
 import { mysqlTableRef, quoteMysqlIdentifier } from '../../src/shared/sql/identifiers.js';
 import { assertWritableMysql, mysqlConnectionOptions } from './dbCommon.js';
 
@@ -23,6 +23,44 @@ export async function updateCell(config: DbConnectionConfig, request: UpdateCell
     const [result] = await connection.execute(sql, params as mysql.ExecuteValues);
     const affectedRows = 'affectedRows' in (result as mysql.ResultSetHeader) ? (result as mysql.ResultSetHeader).affectedRows : 0;
     return { sql, ok: true, affectedRows };
+  } finally {
+    await connection.end();
+  }
+}
+
+export function buildBatchUpdateSql(request: BatchUpdateCellRequest): { sql: string; params: unknown[] }[] {
+  return request.edits.map((edit) =>
+    buildUpdateCellSql({
+      connectionId: request.connectionId,
+      database: request.database,
+      table: request.table,
+      column: edit.column,
+      primaryKey: edit.primaryKey,
+      value: edit.value
+    })
+  );
+}
+
+export async function updateCellsBatch(config: DbConnectionConfig, request: BatchUpdateCellRequest): Promise<BatchUpdateCellResponse> {
+  assertWritableMysql(config);
+  const entries = buildBatchUpdateSql(request);
+  const sqls = entries.map((e) => e.sql);
+
+  if (!request.execute) return { sqls, ok: false };
+
+  const connection = await mysql.createConnection(mysqlConnectionOptions({ ...config, database: request.database }));
+  try {
+    await connection.beginTransaction();
+    let totalAffected = 0;
+    for (const entry of entries) {
+      const [result] = await connection.execute(entry.sql, entry.params as mysql.ExecuteValues);
+      totalAffected += 'affectedRows' in (result as mysql.ResultSetHeader) ? (result as mysql.ResultSetHeader).affectedRows : 0;
+    }
+    await connection.commit();
+    return { sqls, ok: true, affectedRows: totalAffected };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
   } finally {
     await connection.end();
   }
