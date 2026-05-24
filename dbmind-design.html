@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DBMind — 系统设计文档</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0a0f;
+  --bg2: #111118;
+  --bg3: #16161f;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #e8e8f0;
+  --text2: #8888a0;
+  --text3: #55556a;
+  --accent: #6c63ff;
+  --accent2: #a78bfa;
+  --teal: #2dd4bf;
+  --amber: #fbbf24;
+  --coral: #fb7185;
+  --green: #4ade80;
+  --mono: 'DM Mono', monospace;
+  --display: 'Syne', sans-serif;
+  --body: 'DM Sans', sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-x: hidden;
+}
+
+/* noise texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.4;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 48px;
+  height: 60px;
+  background: rgba(10,10,15,0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+.nav-logo span { color: var(--accent2); }
+.nav-links { display: flex; gap: 32px; }
+.nav-links a {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text2);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--text); }
+.nav-badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 12px;
+  background: rgba(108,99,255,0.15);
+  border: 1px solid rgba(108,99,255,0.3);
+  border-radius: 2px;
+  color: var(--accent2);
+  letter-spacing: 0.05em;
+}
+
+/* ── LAYOUT ── */
+.container { max-width: 1100px; margin: 0 auto; padding: 0 48px; }
+
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding-top: 60px;
+}
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+  width: 100%;
+}
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--accent2);
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hero-eyebrow::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 1px;
+  background: var(--accent2);
+}
+.hero-title {
+  font-family: var(--display);
+  font-size: clamp(48px, 5vw, 72px);
+  font-weight: 800;
+  line-height: 1.0;
+  letter-spacing: -0.04em;
+  margin-bottom: 24px;
+}
+.hero-title .line2 { color: var(--accent2); }
+.hero-desc {
+  font-size: 16px;
+  font-weight: 300;
+  color: var(--text2);
+  line-height: 1.8;
+  max-width: 460px;
+  margin-bottom: 40px;
+}
+.hero-stats {
+  display: flex;
+  gap: 32px;
+}
+.stat-item { }
+.stat-num {
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.03em;
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--text3);
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+/* hero right: architecture preview */
+.hero-visual {
+  position: relative;
+}
+.arch-preview {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.arch-preview::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(108,99,255,0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+.arch-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.arch-layer {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.arch-layer:last-child { margin-bottom: 0; }
+.arch-layer-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text2);
+}
+.arch-layer-tech {
+  font-size: 11px;
+  color: var(--text3);
+}
+.arch-layer.highlight { border-color: rgba(108,99,255,0.4); background: rgba(108,99,255,0.08); }
+.arch-layer.highlight .arch-layer-name { color: var(--accent2); }
+.arch-dots {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.arch-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+}
+
+/* ── SECTION SHARED ── */
+section { padding: 100px 0; }
+.section-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--accent2);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.section-title {
+  font-family: var(--display);
+  font-size: clamp(32px, 3vw, 48px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-bottom: 16px;
+}
+.section-desc {
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--text2);
+  max-width: 560px;
+  line-height: 1.8;
+  margin-bottom: 56px;
+}
+.divider {
+  width: 100%;
+  height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+/* ── ARCHITECTURE ── */
+.arch-full {
+  display: grid;
+  gap: 2px;
+}
+.arch-full-layer {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin-bottom: 2px;
+}
+.arch-full-layer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.arch-full-layer-name {
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+.arch-full-layer-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.08em;
+}
+.modules-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.module-chip {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  border: 1px solid;
+}
+.chip-purple { background: rgba(108,99,255,0.1); border-color: rgba(108,99,255,0.25); color: var(--accent2); }
+.chip-teal   { background: rgba(45,212,191,0.08); border-color: rgba(45,212,191,0.2); color: var(--teal); }
+.chip-amber  { background: rgba(251,191,36,0.08); border-color: rgba(251,191,36,0.2); color: var(--amber); }
+.chip-coral  { background: rgba(251,113,133,0.08); border-color: rgba(251,113,133,0.2); color: var(--coral); }
+.chip-gray   { background: rgba(255,255,255,0.04); border-color: var(--border2); color: var(--text2); }
+.chip-green  { background: rgba(74,222,128,0.08); border-color: rgba(74,222,128,0.2); color: var(--green); }
+.arch-arrow {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0;
+  color: var(--text3);
+  font-size: 16px;
+}
+
+/* ── AI MODULE ── */
+.ai-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  align-items: start;
+}
+.flow-steps { }
+.flow-step {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 0;
+  position: relative;
+}
+.flow-step::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 36px;
+  bottom: -1px;
+  width: 1px;
+  background: var(--border);
+}
+.flow-step:last-child::before { display: none; }
+.flow-step-num {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.flow-step.active .flow-step-num {
+  background: rgba(108,99,255,0.2);
+  border-color: rgba(108,99,255,0.5);
+  color: var(--accent2);
+}
+.flow-step-content {
+  padding-bottom: 28px;
+}
+.flow-step-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.flow-step-desc {
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 300;
+  line-height: 1.6;
+}
+
+/* at-syntax demo */
+.syntax-demo {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.syntax-demo-bar {
+  background: var(--bg2);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.syntax-demo-dot { width: 8px; height: 8px; border-radius: 50%; }
+.syntax-demo-title { font-family: var(--mono); font-size: 11px; color: var(--text3); margin-left: 4px; letter-spacing: 0.05em; }
+.syntax-demo-body { padding: 20px; }
+.chat-msg { margin-bottom: 16px; }
+.chat-msg-user { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.chat-bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.bubble-user {
+  background: rgba(108,99,255,0.2);
+  border: 1px solid rgba(108,99,255,0.3);
+  color: var(--text);
+  border-radius: 10px 10px 2px 10px;
+}
+.bubble-ai {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  border-radius: 10px 10px 10px 2px;
+}
+.at-tag {
+  display: inline-block;
+  background: rgba(45,212,191,0.15);
+  border: 1px solid rgba(45,212,191,0.3);
+  color: var(--teal);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 12px;
+  font-family: var(--mono);
+  font-weight: 500;
+}
+.sql-preview {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.9;
+  color: var(--text2);
+}
+.sql-kw { color: #818cf8; }
+.sql-table { color: var(--teal); }
+.sql-fn { color: var(--amber); }
+.sql-str { color: var(--green); }
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(108,99,255,0.15);
+  border: 1px solid rgba(108,99,255,0.3);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--accent2);
+  margin-top: 8px;
+}
+
+/* ── UI LAYOUT ── */
+.ui-mockup {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.mockup-titlebar {
+  background: var(--bg2);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.titlebar-dots { display: flex; gap: 5px; }
+.titlebar-dot { width: 9px; height: 9px; border-radius: 50%; }
+.titlebar-title { font-family: var(--mono); font-size: 11px; color: var(--text3); margin: 0 auto; }
+.mockup-body {
+  display: grid;
+  grid-template-columns: 170px 1fr 220px;
+  height: 440px;
+}
+.mockup-sidebar {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  padding: 12px 0;
+}
+.sidebar-section { margin-bottom: 16px; }
+.sidebar-section-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0 14px;
+  margin-bottom: 6px;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 14px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.sidebar-item.active {
+  background: rgba(108,99,255,0.1);
+  color: var(--text);
+}
+.sidebar-badge {
+  font-size: 9px;
+  background: rgba(108,99,255,0.2);
+  color: var(--accent2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--mono);
+}
+.mockup-center {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+}
+.mockup-toolbar {
+  background: var(--bg2);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.toolbar-btn-m {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text2);
+  cursor: default;
+}
+.toolbar-btn-run {
+  background: rgba(108,99,255,0.2);
+  border-color: rgba(108,99,255,0.4);
+  color: var(--accent2);
+  font-weight: 500;
+}
+.mockup-editor {
+  padding: 14px 16px;
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 2;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+.editor-line { display: flex; gap: 0; }
+.editor-lineno { color: var(--text3); min-width: 22px; }
+.mockup-results {
+  flex: 1;
+  overflow: hidden;
+}
+.result-header {
+  background: var(--bg2);
+  padding: 6px 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.06em;
+  display: flex;
+  justify-content: space-between;
+}
+.result-table { width: 100%; border-collapse: collapse; }
+.result-th { padding: 7px 14px; font-size: 11px; color: var(--text3); font-weight: 400; text-align: left; border-bottom: 1px solid var(--border); font-family: var(--mono); }
+.result-td { padding: 6px 14px; font-size: 11px; color: var(--text2); border-bottom: 1px solid var(--border); font-family: var(--mono); }
+.mockup-ai {
+  background: var(--bg2);
+  display: flex;
+  flex-direction: column;
+}
+.ai-panel-header {
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent2);
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-panel-body { flex: 1; padding: 12px; overflow: hidden; }
+.ai-panel-msg { font-size: 11px; line-height: 1.6; margin-bottom: 10px; }
+.ai-msg-user {
+  background: rgba(108,99,255,0.12);
+  border: 1px solid rgba(108,99,255,0.2);
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: var(--text);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.ai-msg-reply {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: var(--text2);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.ai-input {
+  margin: 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--text3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── TECH STACK ── */
+.tech-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+.tech-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.tech-card:hover {
+  border-color: var(--border2);
+  background: var(--bg3);
+}
+.tech-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+.icon-purple { background: rgba(108,99,255,0.15); color: var(--accent2); border: 1px solid rgba(108,99,255,0.3); }
+.icon-teal   { background: rgba(45,212,191,0.1); color: var(--teal); border: 1px solid rgba(45,212,191,0.25); }
+.icon-amber  { background: rgba(251,191,36,0.1); color: var(--amber); border: 1px solid rgba(251,191,36,0.25); }
+.icon-coral  { background: rgba(251,113,133,0.1); color: var(--coral); border: 1px solid rgba(251,113,133,0.25); }
+.icon-green  { background: rgba(74,222,128,0.1); color: var(--green); border: 1px solid rgba(74,222,128,0.25); }
+.icon-gray   { background: rgba(255,255,255,0.06); color: var(--text2); border: 1px solid var(--border2); }
+.tech-card-label {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text3);
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.tech-card-name {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.tech-card-desc { font-size: 12px; color: var(--text2); font-weight: 300; line-height: 1.6; }
+
+/* ── FEATURES ── */
+.features-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.feature-group {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.feature-group-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.feature-group-icon {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+}
+.feature-group-title {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.feature-list { padding: 8px 0; }
+.feature-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 20px;
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 300;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.feature-item:last-child { border-bottom: none; }
+.feature-item::before {
+  content: '—';
+  color: var(--text3);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* ── ROADMAP ── */
+.roadmap { display: flex; flex-direction: column; gap: 0; }
+.roadmap-item {
+  display: grid;
+  grid-template-columns: 180px 1px 1fr;
+  gap: 0 28px;
+  position: relative;
+}
+.roadmap-time {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text3);
+  padding: 0 0 40px;
+  text-align: right;
+  line-height: 1.4;
+}
+.roadmap-time strong { display: block; color: var(--text2); font-size: 13px; margin-bottom: 2px; }
+.roadmap-line {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.roadmap-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  margin-top: 2px;
+}
+.roadmap-connector {
+  width: 1px;
+  flex: 1;
+  background: var(--border);
+  margin-top: 4px;
+}
+.roadmap-item:last-child .roadmap-connector { display: none; }
+.roadmap-content { padding-bottom: 40px; }
+.roadmap-phase {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+.roadmap-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.roadmap-tag {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid;
+  font-weight: 400;
+}
+
+/* ── ENV SETUP ── */
+.env-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.env-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.env-card-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.env-card-title { font-family: var(--display); font-size: 14px; font-weight: 600; color: var(--text); }
+.env-card-time {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.06em;
+}
+.code-block {
+  padding: 14px 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 2;
+  color: var(--text2);
+}
+.code-comment { color: var(--text3); }
+.code-cmd { color: var(--teal); }
+
+/* ── FOOTER ── */
+footer {
+  padding: 48px 0;
+  border-top: 1px solid var(--border);
+}
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.footer-logo {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.footer-logo span { color: var(--accent2); }
+.footer-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+  text-align: right;
+  line-height: 1.8;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.7s ease both; }
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.3s; }
+.delay-4 { animation-delay: 0.4s; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.pulse { animation: pulse-dot 2s ease-in-out infinite; }
+
+/* ── SCROLL SECTIONS ── */
+.scroll-reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease; }
+.scroll-reveal.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">DB<span>Mind</span></div>
+  <div class="nav-links">
+    <a href="#architecture">架构</a>
+    <a href="#ai-module">AI 模块</a>
+    <a href="#ui">界面</a>
+    <a href="#tech">技术栈</a>
+    <a href="#features">功能</a>
+    <a href="#roadmap">路线图</a>
+    <a href="#env">环境</a>
+  </div>
+  <div class="nav-badge">系统设计文档 v1.0</div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-eyebrow fade-up">AI 数据库管理软件</div>
+        <h1 class="hero-title fade-up delay-1">
+          DB<br>
+          <span class="line2">Mind</span>
+        </h1>
+        <p class="hero-desc fade-up delay-2">
+          传统数据库管理能力 + 内嵌 AI 对话层。通过自然语言与数据库对话，
+          用 <code style="font-family:var(--mono);font-size:13px;color:var(--teal)">@table</code> 语法精确控制查询上下文，
+          跨 Windows / macOS 一致体验。
+        </p>
+        <div class="hero-stats fade-up delay-3">
+          <div class="stat-item">
+            <div class="stat-num">5+</div>
+            <div class="stat-label">支持数据库类型</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num">3</div>
+            <div class="stat-label">架构层级</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num">Win + Mac</div>
+            <div class="stat-label">跨平台支持</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-visual fade-up delay-4">
+        <div class="arch-preview">
+          <div class="arch-dots">
+            <div class="arch-dot pulse" style="background:var(--coral)"></div>
+            <div class="arch-dot" style="background:var(--amber)"></div>
+            <div class="arch-dot" style="background:var(--green)"></div>
+          </div>
+          <div class="arch-label">// 整体架构概览</div>
+          <div class="arch-layer">
+            <span class="arch-layer-name">前端界面层</span>
+            <span class="arch-layer-tech">Electron + React</span>
+          </div>
+          <div class="arch-layer highlight">
+            <span class="arch-layer-name">AI 对话引擎</span>
+            <span class="arch-layer-tech" style="color:var(--accent2)">@table 语法核心</span>
+          </div>
+          <div class="arch-layer">
+            <span class="arch-layer-name">核心服务层</span>
+            <span class="arch-layer-tech">Node.js + Python</span>
+          </div>
+          <div class="arch-layer">
+            <span class="arch-layer-name">数据连接层</span>
+            <span class="arch-layer-tech">多驱动适配器</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <div class="container">
+    <div class="section-tag scroll-reveal">01 — 系统架构</div>
+    <h2 class="section-title scroll-reveal">三层架构设计</h2>
+    <p class="section-desc scroll-reveal">清晰分层，各层职责单一，便于独立迭代与测试。前端与后端通过 Electron IPC 通信，数据库驱动统一封装在连接层。</p>
+
+    <div class="arch-full scroll-reveal">
+      <!-- Layer 1 -->
+      <div class="arch-full-layer" style="border-color:rgba(108,99,255,0.3);background:rgba(108,99,255,0.05)">
+        <div class="arch-full-layer-header">
+          <div>
+            <div class="arch-full-layer-name" style="color:var(--accent2)">前端界面层</div>
+            <div class="arch-full-layer-sub">Electron + React + TypeScript · Vite 热更新</div>
+          </div>
+        </div>
+        <div class="modules-row">
+          <span class="module-chip chip-purple">AI 对话面板</span>
+          <span class="module-chip chip-purple">SQL 编辑器 (CodeMirror 6)</span>
+          <span class="module-chip chip-purple">结果集展示</span>
+          <span class="module-chip chip-purple">图表可视化 (ECharts)</span>
+          <span class="module-chip chip-purple">连接管理</span>
+          <span class="module-chip chip-purple">对象浏览器</span>
+          <span class="module-chip chip-purple">ER 关系图</span>
+          <span class="module-chip chip-purple">查询历史</span>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↕</div>
+      <div style="text-align:center;font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:0.08em;margin:-8px 0 4px">Electron IPC 通信</div>
+
+      <!-- Layer 2 -->
+      <div class="arch-full-layer" style="border-color:rgba(45,212,191,0.3);background:rgba(45,212,191,0.04)">
+        <div class="arch-full-layer-header">
+          <div>
+            <div class="arch-full-layer-name" style="color:var(--teal)">核心服务层</div>
+            <div class="arch-full-layer-sub">Node.js (Fastify) + Python 辅助</div>
+          </div>
+        </div>
+        <div class="modules-row">
+          <span class="module-chip chip-teal">AI 引擎 (LLM 调用 + Schema 注入)</span>
+          <span class="module-chip chip-teal">查询执行引擎</span>
+          <span class="module-chip chip-teal">元数据缓存服务</span>
+          <span class="module-chip chip-teal">SQL 校验 + 安全过滤</span>
+          <span class="module-chip chip-teal">SSH 隧道管理</span>
+          <span class="module-chip chip-teal">本地 SQLite 状态存储</span>
+        </div>
+      </div>
+
+      <div class="arch-arrow">↕</div>
+      <div style="text-align:center;font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:0.08em;margin:-8px 0 4px">数据库驱动协议</div>
+
+      <!-- Layer 3 -->
+      <div class="arch-full-layer" style="border-color:rgba(251,191,36,0.3);background:rgba(251,191,36,0.04)">
+        <div class="arch-full-layer-header">
+          <div>
+            <div class="arch-full-layer-name" style="color:var(--amber)">数据连接层</div>
+            <div class="arch-full-layer-sub">驱动适配器模式，统一接口抽象</div>
+          </div>
+        </div>
+        <div class="modules-row">
+          <span class="module-chip chip-amber">MySQL / MariaDB</span>
+          <span class="module-chip chip-amber">PostgreSQL / CockroachDB</span>
+          <span class="module-chip chip-amber">SQLite</span>
+          <span class="module-chip chip-amber">SQL Server</span>
+          <span class="module-chip chip-amber">Oracle</span>
+          <span class="module-chip chip-amber">MongoDB (NoSQL)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- AI MODULE -->
+<section id="ai-module">
+  <div class="container">
+    <div class="section-tag scroll-reveal">02 — AI 核心模块</div>
+    <h2 class="section-title scroll-reveal">@table 语法与 AI 对话</h2>
+    <p class="section-desc scroll-reveal">这是 DBMind 与传统数据库工具的核心差异。用户通过自然语言描述需求，用 @table 精确告知模型使用哪些表，系统自动注入 Schema 上下文并生成可执行 SQL。</p>
+
+    <div class="ai-grid scroll-reveal">
+      <!-- Flow steps -->
+      <div class="flow-steps">
+        <div class="flow-step active">
+          <div class="flow-step-num">01</div>
+          <div class="flow-step-content">
+            <div class="flow-step-title">用户输入自然语言 + @table</div>
+            <div class="flow-step-desc">在 AI 对话框中键入 @ 触发自动补全，选择目标表后描述查询意图。支持多表引用。</div>
+          </div>
+        </div>
+        <div class="flow-step active">
+          <div class="flow-step-num">02</div>
+          <div class="flow-step-content">
+            <div class="flow-step-title">解析 @table 语法</div>
+            <div class="flow-step-desc">系统提取所有 @table 标记，构建本次查询的表名列表。</div>
+          </div>
+        </div>
+        <div class="flow-step active">
+          <div class="flow-step-num">03</div>
+          <div class="flow-step-content">
+            <div class="flow-step-title">拉取并注入 Schema</div>
+            <div class="flow-step-desc">从元数据缓存中获取指定表的字段名、类型、外键关系，结构化注入 LLM 的 System Prompt。</div>
+          </div>
+        </div>
+        <div class="flow-step active">
+          <div class="flow-step-num">04</div>
+          <div class="flow-step-content">
+            <div class="flow-step-title">LLM 生成 SQL</div>
+            <div class="flow-step-desc">支持 OpenAI / Anthropic / Azure OpenAI / Ollama 本地模型，可配置切换。</div>
+          </div>
+        </div>
+        <div class="flow-step active">
+          <div class="flow-step-num">05</div>
+          <div class="flow-step-content">
+            <div class="flow-step-title">SQL 校验 + 安全检查</div>
+            <div class="flow-step-desc">语法校验、防 SQL 注入、危险操作（DROP/DELETE 无 WHERE）二次确认，生产库默认追加 LIMIT 1000。</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-step-num">06</div>
+          <div class="flow-step-content">
+            <div class="flow-step-title">注入 SQL 编辑器</div>
+            <div class="flow-step-desc">生成的 SQL 带 AI 标记注入编辑器，用户可直接执行或继续编辑。支持多轮迭代优化。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Syntax demo -->
+      <div>
+        <div class="syntax-demo">
+          <div class="syntax-demo-bar">
+            <div class="syntax-demo-dot" style="background:#ff5f57"></div>
+            <div class="syntax-demo-dot" style="background:#ffbd2e"></div>
+            <div class="syntax-demo-dot" style="background:#28c840"></div>
+            <div class="syntax-demo-title">// AI 对话面板</div>
+          </div>
+          <div class="syntax-demo-body">
+            <div class="chat-msg-user">
+              <div class="chat-bubble bubble-user">
+                查询 <span class="at-tag">@orders</span> <span class="at-tag">@order_items</span> 最近 7 天每天的销售额汇总，按日期升序
+              </div>
+            </div>
+            <div class="chat-bubble bubble-ai">
+              <div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:6px">AI 助手 · 已注入 Schema: orders(12列) order_items(8列)</div>
+              已为您生成 SQL，通过 JOIN 关联两表统计每日销售额：
+              <div class="sql-preview">
+<span class="sql-kw">SELECT</span><br>
+&nbsp;&nbsp;<span class="sql-fn">DATE_FORMAT</span>(o.created_at, <span class="sql-str">'%Y-%m-%d'</span>) <span class="sql-kw">AS</span> date,<br>
+&nbsp;&nbsp;<span class="sql-fn">SUM</span>(oi.quantity * oi.unit_price) <span class="sql-kw">AS</span> revenue<br>
+<span class="sql-kw">FROM</span> <span class="sql-table">orders</span> o<br>
+<span class="sql-kw">JOIN</span> <span class="sql-table">order_items</span> oi <span class="sql-kw">ON</span> o.id = oi.order_id<br>
+<span class="sql-kw">WHERE</span> o.created_at &gt;= <span class="sql-fn">DATE_SUB</span>(<span class="sql-fn">NOW</span>(), <span class="sql-fn">INTERVAL</span> 7 <span class="sql-kw">DAY</span>)<br>
+<span class="sql-kw">GROUP BY</span> date <span class="sql-kw">ORDER BY</span> date <span class="sql-kw">ASC</span>;
+              </div>
+              <div class="ai-badge">✦ AI 生成 · 点击编辑器可直接修改</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:18px 20px">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:0.08em;margin-bottom:12px">// @TABLE 语法安全规则</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2)">
+              <span style="color:var(--green);font-size:14px">✓</span> 白名单模式：可限制 AI 仅访问指定表
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2)">
+              <span style="color:var(--green);font-size:14px">✓</span> 生产库自动追加 LIMIT 1000
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2)">
+              <span style="color:var(--amber);font-size:14px">⚠</span> DROP / DELETE 无 WHERE 需二次确认
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2)">
+              <span style="color:var(--green);font-size:14px">✓</span> Schema 仅在本次对话内传递，不持久化到模型
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- UI LAYOUT -->
+<section id="ui">
+  <div class="container">
+    <div class="section-tag scroll-reveal">03 — 界面设计</div>
+    <h2 class="section-title scroll-reveal">四区域主界面布局</h2>
+    <p class="section-desc scroll-reveal">左侧对象浏览器 · 中央 SQL 编辑器 + 结果集 · 右侧 AI 对话面板。三列布局兼顾传统 DBA 工作流与 AI 辅助工作流。</p>
+
+    <div class="ui-mockup scroll-reveal">
+      <div class="mockup-titlebar">
+        <div class="titlebar-dots">
+          <div class="titlebar-dot" style="background:#ff5f57"></div>
+          <div class="titlebar-dot" style="background:#ffbd2e"></div>
+          <div class="titlebar-dot" style="background:#28c840"></div>
+        </div>
+        <div class="titlebar-title">DBMind — MySQL · prod-server</div>
+      </div>
+      <div class="mockup-body">
+        <!-- Sidebar -->
+        <div class="mockup-sidebar">
+          <div class="sidebar-section">
+            <div class="sidebar-section-label">数据库</div>
+            <div class="sidebar-item active">shop_db</div>
+            <div class="sidebar-item">analytics</div>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-label">表</div>
+            <div class="sidebar-item active">orders <span class="sidebar-badge">AI</span></div>
+            <div class="sidebar-item">order_items</div>
+            <div class="sidebar-item">users</div>
+            <div class="sidebar-item">products</div>
+            <div class="sidebar-item">categories</div>
+          </div>
+          <div class="sidebar-section">
+            <div class="sidebar-section-label">视图</div>
+            <div class="sidebar-item">daily_revenue</div>
+          </div>
+        </div>
+
+        <!-- Center -->
+        <div class="mockup-center">
+          <div class="mockup-toolbar">
+            <div class="toolbar-btn-m toolbar-btn-run">▶ 执行</div>
+            <div class="toolbar-btn-m">停止</div>
+            <div class="toolbar-btn-m">✦ AI 优化</div>
+            <div class="toolbar-btn-m">导出</div>
+            <div style="margin-left:auto;font-size:10px;color:var(--text3);font-family:var(--mono)">23ms · 7 行</div>
+          </div>
+          <div class="mockup-editor">
+            <div class="editor-line"><span class="editor-lineno">1</span><span class="sql-kw" style="font-size:11px">SELECT</span></div>
+            <div class="editor-line"><span class="editor-lineno">2</span><span style="color:var(--text2);font-size:11px">&nbsp;&nbsp;<span class="sql-fn" style="font-size:11px">DATE_FORMAT</span>(o.created_at, <span class="sql-str" style="font-size:11px">'%Y-%m-%d'</span>) <span class="sql-kw" style="font-size:11px">AS</span> date,</span></div>
+            <div class="editor-line"><span class="editor-lineno">3</span><span style="color:var(--text2);font-size:11px">&nbsp;&nbsp;<span class="sql-fn" style="font-size:11px">SUM</span>(oi.quantity * oi.unit_price) <span class="sql-kw" style="font-size:11px">AS</span> revenue</span></div>
+            <div class="editor-line"><span class="editor-lineno">4</span><span class="sql-kw" style="font-size:11px">FROM</span>&nbsp;<span class="sql-table" style="font-size:11px">orders</span>&nbsp;o</div>
+            <div class="editor-line"><span class="editor-lineno">5</span><span class="sql-kw" style="font-size:11px">JOIN</span>&nbsp;<span class="sql-table" style="font-size:11px">order_items</span>&nbsp;oi <span class="sql-kw" style="font-size:11px">ON</span> o.id = oi.order_id</div>
+            <div class="editor-line"><span class="editor-lineno">6</span><span class="sql-kw" style="font-size:11px">WHERE</span>&nbsp;o.created_at &gt;= <span class="sql-fn" style="font-size:11px">DATE_SUB</span>(<span class="sql-fn" style="font-size:11px">NOW</span>(), <span class="sql-fn" style="font-size:11px">INTERVAL</span> 7 <span class="sql-kw" style="font-size:11px">DAY</span>)</div>
+            <div class="editor-line"><span class="editor-lineno">7</span><span class="sql-kw" style="font-size:11px">GROUP BY</span>&nbsp;date <span class="sql-kw" style="font-size:11px">ORDER BY</span>&nbsp;date;</div>
+            <div style="margin-top:10px"><span style="font-size:10px;font-family:var(--mono);padding:2px 8px;background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);border-radius:3px;color:var(--accent2)">✦ AI 生成</span></div>
+          </div>
+          <div class="mockup-results">
+            <div class="result-header">
+              <span>结果集</span>
+              <span>图表</span>
+              <span>执行计划</span>
+            </div>
+            <table class="result-table">
+              <thead><tr><th class="result-th">date</th><th class="result-th">revenue</th></tr></thead>
+              <tbody>
+                <tr><td class="result-td">2026-05-18</td><td class="result-td">¥128,450.00</td></tr>
+                <tr><td class="result-td">2026-05-19</td><td class="result-td">¥94,320.00</td></tr>
+                <tr><td class="result-td">2026-05-20</td><td class="result-td">¥201,780.00</td></tr>
+                <tr><td class="result-td" style="color:var(--text3)">... 4 更多行</td><td class="result-td"></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- AI Panel -->
+        <div class="mockup-ai">
+          <div class="ai-panel-header">✦ AI 助手</div>
+          <div class="ai-panel-body">
+            <div class="ai-msg-user">查询 <span class="at-tag" style="font-size:10px">@orders</span> <span class="at-tag" style="font-size:10px">@order_items</span> 最近7天销售额</div>
+            <div class="ai-msg-reply">已生成 JOIN 查询，注入编辑器 ✓</div>
+            <div class="ai-msg-user" style="margin-top:6px">改成按周汇总？</div>
+            <div class="ai-msg-reply" style="opacity:0.5;font-style:italic">正在生成...</div>
+          </div>
+          <div class="ai-input">
+            <span>输入 @ 引用表...</span>
+            <span style="color:var(--accent2)">↑</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- TECH STACK -->
+<section id="tech">
+  <div class="container">
+    <div class="section-tag scroll-reveal">04 — 技术栈</div>
+    <h2 class="section-title scroll-reveal">选型决策</h2>
+    <p class="section-desc scroll-reveal">每项技术的选择都有明确理由。Electron 保证跨平台，Vite 保证开发体验，可插拔 LLM 适配器保证灵活性。</p>
+
+    <div class="tech-grid scroll-reveal">
+      <div class="tech-card">
+        <div class="tech-card-icon icon-purple">e</div>
+        <div class="tech-card-label">桌面框架</div>
+        <div class="tech-card-name">Electron</div>
+        <div class="tech-card-desc">一套代码覆盖 Windows + macOS。Node.js 生态原生访问系统 API，打包输出 .exe / .dmg。</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-card-icon icon-teal">R</div>
+        <div class="tech-card-label">前端框架</div>
+        <div class="tech-card-name">React + TypeScript</div>
+        <div class="tech-card-desc">组件化架构，类型安全。配合 Vite 实现毫秒级热更新，提升开发体验。</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-card-icon icon-amber">CM</div>
+        <div class="tech-card-label">SQL 编辑器</div>
+        <div class="tech-card-name">CodeMirror 6</div>
+        <div class="tech-card-desc">支持 SQL 语法高亮、智能补全、多种数据库方言，可扩展 @table 自定义语法。</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-card-icon icon-purple">AI</div>
+        <div class="tech-card-label">LLM 调用</div>
+        <div class="tech-card-name">可插拔 LLM 适配器</div>
+        <div class="tech-card-desc">统一接口，支持 OpenAI / Anthropic / Azure OpenAI / Ollama 本地模型，用户自由选择。</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-card-icon icon-teal">Fa</div>
+        <div class="tech-card-label">后端服务</div>
+        <div class="tech-card-name">Node.js + Fastify</div>
+        <div class="tech-card-desc">轻量高性能 HTTP 框架，处理数据库连接池、API 转发、查询缓存。</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-card-icon icon-green">Ec</div>
+        <div class="tech-card-label">数据可视化</div>
+        <div class="tech-card-name">ECharts</div>
+        <div class="tech-card-desc">结果集图表化展示。折线图、柱状图、散点图等，一键将查询结果转为可视化。</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-card-icon icon-amber">SQ</div>
+        <div class="tech-card-label">本地存储</div>
+        <div class="tech-card-name">SQLite（内嵌）</div>
+        <div class="tech-card-desc">保存连接配置（加密）、查询历史、AI 对话记录。无需额外数据库服务。</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-card-icon icon-gray">eb</div>
+        <div class="tech-card-label">状态管理</div>
+        <div class="tech-card-name">Zustand</div>
+        <div class="tech-card-desc">轻量 React 状态管理，替代 Redux。管理连接状态、查询结果、AI 对话上下文。</div>
+      </div>
+      <div class="tech-card">
+        <div class="tech-card-icon icon-coral">pk</div>
+        <div class="tech-card-label">打包发行</div>
+        <div class="tech-card-name">electron-builder</div>
+        <div class="tech-card-desc">输出 NSIS .exe（Windows）和 .dmg（macOS）。支持代码签名与 macOS Notarization。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="section-tag scroll-reveal">05 — 功能模块</div>
+    <h2 class="section-title scroll-reveal">完整功能清单</h2>
+    <p class="section-desc scroll-reveal">传统数据库管理能力对标 TablePlus / DBeaver，AI 专属功能是核心差异化竞争力。</p>
+
+    <div class="features-grid scroll-reveal">
+      <div class="feature-group">
+        <div class="feature-group-header">
+          <div class="feature-group-icon icon-gray" style="font-size:14px">🗄</div>
+          <div class="feature-group-title">传统数据库管理</div>
+        </div>
+        <div class="feature-list">
+          <div class="feature-item">多数据库连接管理（SSH 隧道 / SSL）</div>
+          <div class="feature-item">表结构查看与编辑（DDL 生成、字段增删改）</div>
+          <div class="feature-item">数据浏览与行内编辑</div>
+          <div class="feature-item">SQL 编辑器（语法高亮、代码补全、多标签）</div>
+          <div class="feature-item">查询历史与收藏夹</div>
+          <div class="feature-item">数据导入导出（CSV / JSON / Excel）</div>
+          <div class="feature-item">ER 关系图自动生成</div>
+          <div class="feature-item">执行计划可视化（EXPLAIN）</div>
+          <div class="feature-item">用户与权限管理</div>
+        </div>
+      </div>
+
+      <div class="feature-group" style="border-color:rgba(108,99,255,0.3)">
+        <div class="feature-group-header" style="border-color:rgba(108,99,255,0.2);background:rgba(108,99,255,0.05)">
+          <div class="feature-group-icon icon-purple" style="font-size:14px">✦</div>
+          <div class="feature-group-title" style="color:var(--accent2)">AI 专属功能</div>
+        </div>
+        <div class="feature-list">
+          <div class="feature-item">自然语言 → SQL 生成（@table 语法核心）</div>
+          <div class="feature-item">多轮对话迭代优化 SQL</div>
+          <div class="feature-item">SQL 解释（复杂 SQL 翻译成中文说明）</div>
+          <div class="feature-item">SQL 审查与优化建议</div>
+          <div class="feature-item">异常错误智能诊断（报错自动分析原因）</div>
+          <div class="feature-item">表结构智能摘要（一句话描述表用途）</div>
+          <div class="feature-item">安全白名单：限制 AI 可查询的表</div>
+          <div class="feature-item">本地模型支持（Ollama 离线使用）</div>
+          <div class="feature-item">对话记录持久化与搜索</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ROADMAP -->
+<section id="roadmap">
+  <div class="container">
+    <div class="section-tag scroll-reveal">06 — 产品路线图</div>
+    <h2 class="section-title scroll-reveal">分阶段交付</h2>
+    <p class="section-desc scroll-reveal">MVP 聚焦核心 AI 对话功能，验证市场假设后再逐步扩展数据库支持与协作能力。</p>
+
+    <div class="roadmap scroll-reveal">
+      <div class="roadmap-item">
+        <div class="roadmap-time">
+          <strong>MVP</strong>
+          第 1–3 月
+        </div>
+        <div class="roadmap-line">
+          <div class="roadmap-dot" style="background:var(--accent2)"></div>
+          <div class="roadmap-connector"></div>
+        </div>
+        <div class="roadmap-content">
+          <div class="roadmap-phase">核心功能验证</div>
+          <div class="roadmap-items">
+            <span class="roadmap-tag chip-purple">MySQL / PostgreSQL 连接</span>
+            <span class="roadmap-tag chip-purple">基础 SQL 编辑器</span>
+            <span class="roadmap-tag chip-purple">AI 对话生成 SQL</span>
+            <span class="roadmap-tag chip-purple">@table 语法</span>
+            <span class="roadmap-tag chip-purple">Windows + macOS 打包</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="roadmap-item">
+        <div class="roadmap-time">
+          <strong>v1.0</strong>
+          第 4–6 月
+        </div>
+        <div class="roadmap-line">
+          <div class="roadmap-dot" style="background:var(--teal)"></div>
+          <div class="roadmap-connector"></div>
+        </div>
+        <div class="roadmap-content">
+          <div class="roadmap-phase">扩展数据库与 AI 能力</div>
+          <div class="roadmap-items">
+            <span class="roadmap-tag chip-teal">SQLite / SQL Server 支持</span>
+            <span class="roadmap-tag chip-teal">结果集图表可视化</span>
+            <span class="roadmap-tag chip-teal">查询历史</span>
+            <span class="roadmap-tag chip-teal">SSH 隧道</span>
+            <span class="roadmap-tag chip-teal">AI 错误诊断</span>
+            <span class="roadmap-tag chip-teal">SQL 解释功能</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="roadmap-item">
+        <div class="roadmap-time">
+          <strong>v2.0</strong>
+          第 7–12 月
+        </div>
+        <div class="roadmap-line">
+          <div class="roadmap-dot" style="background:var(--amber)"></div>
+          <div class="roadmap-connector"></div>
+        </div>
+        <div class="roadmap-content">
+          <div class="roadmap-phase">团队协作与生态</div>
+          <div class="roadmap-items">
+            <span class="roadmap-tag chip-amber">团队共享查询库</span>
+            <span class="roadmap-tag chip-amber">Ollama 本地模型</span>
+            <span class="roadmap-tag chip-amber">ER 关系图</span>
+            <span class="roadmap-tag chip-amber">权限管理</span>
+            <span class="roadmap-tag chip-amber">插件系统</span>
+            <span class="roadmap-tag chip-amber">MongoDB NoSQL 支持</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ENV SETUP -->
+<section id="env">
+  <div class="container">
+    <div class="section-tag scroll-reveal">07 — 开发环境</div>
+    <h2 class="section-title scroll-reveal">Mac Intel 环境搭建</h2>
+    <p class="section-desc scroll-reveal">按顺序执行，总耗时约 1 小时。每步验证通过后再继续，避免依赖问题叠加。</p>
+
+    <div class="env-grid scroll-reveal">
+      <div class="env-card">
+        <div class="env-card-header">
+          <div class="env-card-title">1 · Xcode CLI Tools</div>
+          <div class="env-card-time">~10 分钟</div>
+        </div>
+        <div class="code-block">
+          <span class="code-comment"># Mac 底层编译依赖</span><br>
+          <span class="code-cmd">xcode-select --install</span><br>
+          <span class="code-comment"># 验证</span><br>
+          <span class="code-cmd">git --version</span>
+        </div>
+      </div>
+
+      <div class="env-card">
+        <div class="env-card-header">
+          <div class="env-card-title">2 · Homebrew</div>
+          <div class="env-card-time">~5 分钟</div>
+        </div>
+        <div class="code-block">
+          <span class="code-comment"># macOS 包管理器</span><br>
+          <span class="code-cmd">/bin/bash -c "$(curl -fsSL \</span><br>
+          <span class="code-cmd">&nbsp;https://brew.sh/install.sh)"</span><br>
+          <span class="code-cmd">brew --version</span>
+        </div>
+      </div>
+
+      <div class="env-card">
+        <div class="env-card-header">
+          <div class="env-card-title">3 · Node.js via nvm</div>
+          <div class="env-card-time">~5 分钟</div>
+        </div>
+        <div class="code-block">
+          <span class="code-cmd">brew install nvm</span><br>
+          <span class="code-cmd">nvm install 20</span><br>
+          <span class="code-cmd">nvm use 20</span><br>
+          <span class="code-cmd">node --version</span>&nbsp;<span class="code-comment"># v20.x</span>
+        </div>
+      </div>
+
+      <div class="env-card">
+        <div class="env-card-header">
+          <div class="env-card-title">4 · VS Code + 插件</div>
+          <div class="env-card-time">~10 分钟</div>
+        </div>
+        <div class="code-block">
+          <span class="code-cmd">brew install --cask visual-studio-code</span><br>
+          <span class="code-comment"># 必装：ESLint, Prettier, TypeScript</span><br>
+          <span class="code-comment"># SQLTools, ES7+ React Snippets</span><br>
+          <span class="code-comment"># GitLens, Thunder Client</span>
+        </div>
+      </div>
+
+      <div class="env-card">
+        <div class="env-card-header">
+          <div class="env-card-title">5 · 本地数据库</div>
+          <div class="env-card-time">~10 分钟</div>
+        </div>
+        <div class="code-block">
+          <span class="code-cmd">brew install mysql postgresql@16</span><br>
+          <span class="code-cmd">brew services start mysql</span><br>
+          <span class="code-cmd">brew services start postgresql@16</span>
+        </div>
+      </div>
+
+      <div class="env-card" style="border-color:rgba(108,99,255,0.3)">
+        <div class="env-card-header" style="border-color:rgba(108,99,255,0.2);background:rgba(108,99,255,0.05)">
+          <div class="env-card-title" style="color:var(--accent2)">6 · 创建项目</div>
+          <div class="env-card-time">~5 分钟</div>
+        </div>
+        <div class="code-block">
+          <span class="code-cmd">npm create electron-vite@latest dbmind</span><br>
+          <span class="code-comment"># 选择 react-ts 模板</span><br>
+          <span class="code-cmd">cd dbmind && npm install</span><br>
+          <span class="code-cmd">npm run dev</span>&nbsp;<span class="code-comment"># 窗口弹出 ✓</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px 24px;display:flex;gap:16px;align-items:flex-start" class="scroll-reveal">
+      <div style="font-size:20px;flex-shrink:0">⚠</div>
+      <div>
+        <div style="font-family:var(--display);font-size:14px;font-weight:600;color:var(--amber);margin-bottom:8px">Mac Intel 特别注意</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.8">
+          Intel Mac 的 Homebrew 路径为 <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">/usr/local/bin</code>，
+          与 Apple Silicon (<code style="font-family:var(--mono);font-size:12px;color:var(--teal)">/opt/homebrew</code>) 不同，无需特殊配置。
+          使用 <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">better-sqlite3</code> 等原生 Node 模块时，
+          需用 <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">electron-rebuild</code> 重新编译，遇到报错属正常情况。
+          项目根目录创建 <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">.nvmrc</code> 写入 <code style="font-family:var(--mono);font-size:12px;color:var(--teal)">20</code> 可固定 Node 版本。
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-logo">DB<span>Mind</span></div>
+      <div class="footer-meta">
+        系统设计文档 v1.0<br>
+        Electron + React + TypeScript · AI 数据库管理软件
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((entry, i) => {
+    if (entry.isIntersecting) {
+      setTimeout(() => {
+        entry.target.classList.add('visible');
+      }, 80);
+    }
+  });
+}, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.scroll-reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
