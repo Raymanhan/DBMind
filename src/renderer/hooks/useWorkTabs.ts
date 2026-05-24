@@ -7,15 +7,13 @@ function createConsoleTab(): WorkTab {
 }
 
 export function useWorkTabs({
-  api, activeConnectionId, selectedDbs, setNotice, setLoadingFlag, setPendingEdits, setActiveInlineEditor
+  api, activeConnectionId, selectedDbs, setNotice, setLoadingFlag
 }: {
   api: DbmindApi;
   activeConnectionId: string;
   selectedDbs: string[];
   setNotice: (msg: string) => void;
   setLoadingFlag: (k: 'query', v: boolean) => void;
-  setPendingEdits: (edits: any[]) => void;
-  setActiveInlineEditor: (v: null) => void;
 }) {
   const [workTabs, setWorkTabs] = useState<WorkTab[]>([createConsoleTab()]);
   const [activeWorkTabId, setActiveWorkTabId] = useState('console');
@@ -25,11 +23,6 @@ export function useWorkTabs({
     setWorkTabs([createConsoleTab()]);
     setActiveWorkTabId('console');
   }, [activeConnectionId]);
-
-  useEffect(() => {
-    setPendingEdits([]);
-    setActiveInlineEditor(null);
-  }, [activeWorkTabId]);
 
   useEffect(() => {
     api.getQueryHistory().then(setQueryHistory).catch(() => setQueryHistory([]));
@@ -65,8 +58,6 @@ export function useWorkTabs({
   const runWorkTabQuery = useCallback(async (tabId: string = activeWorkTabId, sqlOverride?: string) => {
     const tab = workTabs.find((item) => item.id === tabId);
     if (!tab || !activeConnectionId) { setNotice('请先保存并选择一个数据库连接。'); return; }
-    setPendingEdits([]);
-    setActiveInlineEditor(null);
     setLoadingFlag('query', true);
     setNotice('');
     try {
@@ -80,7 +71,7 @@ export function useWorkTabs({
     } finally {
       setLoadingFlag('query', false);
     }
-  }, [workTabs, activeWorkTabId, activeConnectionId, selectedDbs, api, setNotice, setLoadingFlag, setPendingEdits, setActiveInlineEditor, updateWorkTab]);
+  }, [workTabs, activeWorkTabId, activeConnectionId, selectedDbs, api, setNotice, setLoadingFlag, updateWorkTab]);
 
   const openTableTab = useCallback((dbName: string, table: TableSchema, autoRun = true) => {
     const id = `table:${activeConnectionId}:${dbName}:${table.name}`;
