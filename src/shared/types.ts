@@ -51,6 +51,21 @@ export interface QueryResult {
   rowCount: number;
 }
 
+export type ResultTab = 'results' | 'history';
+
+export interface WorkTab {
+  id: string;
+  title: string;
+  kind: 'sql' | 'table';
+  dbName?: string;
+  tableName?: string;
+  baseSql: string;
+  sql: string;
+  result: QueryResult | null;
+  resultTab: ResultTab;
+  sort?: { column: string; direction: 'asc' | 'desc' };
+}
+
 export interface EditableCellContext {
   connectionId: string;
   database: string;

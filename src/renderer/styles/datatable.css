@@ -1,0 +1,151 @@
+.table-wrap {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+}
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  color: var(--text);
+  background: rgba(10, 10, 15, 0.58);
+  backdrop-filter: blur(2px);
+  font-size: 13px;
+}
+.loading-overlay .spinner {
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+}
+th, td {
+  max-width: 260px;
+  padding: 10px 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  color: var(--muted);
+  text-align: left;
+  background: var(--bg2);
+}
+thead tr:first-child th {
+  top: 0;
+}
+.column-sort {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 110px;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+.column-sort span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.column-sort em {
+  color: var(--dim);
+  font-size: 11px;
+  font-style: normal;
+}
+.column-sort.active {
+  color: var(--text);
+}
+.column-sort.active em {
+  color: var(--accent);
+}
+td { color: #c9c9d8; }
+td.cell-editable {
+  cursor: cell;
+}
+td.cell-editable:hover {
+  background: rgba(57, 217, 138, 0.08);
+}
+td.cell-readonly {
+  cursor: not-allowed;
+}
+td.cell-edited {
+  background: rgba(45, 212, 191, 0.14);
+}
+td.cell-edited:hover {
+  background: rgba(45, 212, 191, 0.22);
+}
+.cell-edited-null {
+  color: var(--muted);
+  font-style: italic;
+}
+.cell-editor-wrap {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 190px;
+}
+.cell-editor {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+}
+.cell-editor-wrap button {
+  height: 30px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 10px;
+}
+.empty-state {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--dim);
+  font-size: 13px;
+}
+.workspace-empty {
+  align-content: center;
+  gap: 10px;
+  padding: 28px;
+  text-align: center;
+}
+.workspace-empty strong {
+  color: var(--text);
+  font-size: 15px;
+}
+.workspace-empty span {
+  max-width: 420px;
+  line-height: 1.6;
+}
+.workspace-empty button {
+  width: auto;
+  margin-top: 6px;
+  padding: 0 14px;
+}

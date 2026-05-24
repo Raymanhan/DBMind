@@ -1,0 +1,65 @@
+/* SQL syntax highlighting */
+.sql-kw { color: #c792ea; font-weight: 600; }        /* keywords */
+.sql-fn { color: #82aaff; }                           /* functions */
+.sql-type { color: #ffcb6b; }                         /* types */
+.sql-str { color: #c3e88d; }                          /* strings */
+.sql-num { color: #f78c6c; }                          /* numbers */
+.sql-cmt { color: #676e95; font-style: italic; }      /* comments */
+.sql-bt { color: #ffcb6b; }                           /* backtick identifiers */
+.sql-paren { color: #89ddff; }                        /* operators/parens */
+
+.theme-light .sql-kw { color: #7c3aed; }
+.theme-light .sql-fn { color: #2563eb; }
+.theme-light .sql-type { color: #b45309; }
+.theme-light .sql-str { color: #059669; }
+.theme-light .sql-num { color: #dc2626; }
+.theme-light .sql-cmt { color: #9ca3af; }
+.theme-light .sql-bt { color: #b45309; }
+.theme-light .sql-paren { color: #0ea5e9; }
+
+/* SQL autocomplete */
+.sql-autocomplete {
+  position: absolute;
+  z-index: 20;
+  min-width: 200px;
+  max-width: 300px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+}
+.sql-ac-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.sql-ac-item.active {
+  background: rgba(139, 124, 255, 0.18);
+}
+.sql-ac-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sql-ac-keyword { color: #c792ea; }
+.sql-ac-table { color: #ffcb6b; }
+.sql-ac-column { color: #82aaff; }
+.sql-ac-sub {
+  flex-shrink: 0;
+  margin-left: 12px;
+  color: var(--dim);
+  font-size: 11px;
+}

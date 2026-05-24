@@ -1,25 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Bot,
-  CheckCircle2,
   ChevronDown,
-  Cpu,
   Database,
   Edit3,
-  History,
-  KeyRound,
-  Moon,
-  Play,
   Plus,
   RefreshCw,
   Save,
   Search,
-  Settings,
-  Sparkles,
-  Sun,
   Table2,
-  Trash2,
-  Wand2
+  Trash2
 } from 'lucide-react';
 import type {
   AiGenerateResponse,
@@ -33,33 +22,30 @@ import type {
   DbmindApi,
   QueryHistoryItem,
   QueryResult,
-  TableSchema
+  ResultTab,
+  TableSchema,
+  WorkTab
 } from '../shared/types';
 import { extractTableMentions } from '../shared/sqlTools';
-import { TableDesignerModal } from './components/schema/TableDesigner';
+import { AiPanel } from './components/ai/AiPanel';
+import { ConnectionModal } from './components/connection/ConnectionModal';
 import { SqlEditor } from './components/editor/SqlEditor';
+import { SqlConfirmModal } from './components/modals/SqlConfirmModal';
+import { LeftRail } from './components/navigation/LeftRail';
+import { HistoryPanel } from './components/result/HistoryPanel';
+import { TableDesignerModal } from './components/schema/TableDesigner';
+import { TopBar } from './components/workspace/TopBar';
+import { WorkTabStrip } from './components/workspace/WorkTabStrip';
+import { SettingsView } from './components/settings/SettingsView';
 import { browserFallbackApi } from './browserApi';
 
 type AppView = 'workspace' | 'settings';
-type ResultTab = 'results' | 'history';
 type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   sql?: string;
   meta?: string;
   warnings?: string[];
-};
-type WorkTab = {
-  id: string;
-  title: string;
-  kind: 'sql' | 'table';
-  dbName?: string;
-  tableName?: string;
-  baseSql: string;
-  sql: string;
-  result: QueryResult | null;
-  resultTab: ResultTab;
-  sort?: { column: string; direction: 'asc' | 'desc' };
 };
 type BatchCellEdit = {
   rowIndex: number;
@@ -68,11 +54,7 @@ type BatchCellEdit = {
   originalValue: string;
   asNull: boolean;
 };
-type PendingSqlConfirm = {
-  title: string;
-  sql: string;
-  onConfirm: () => Promise<void>;
-};
+import type { SqlConfirmData } from './components/modals/SqlConfirmModal';
 
 const api: DbmindApi = window.dbmind ?? browserFallbackApi;
 
@@ -135,13 +117,7 @@ function providerLabel(provider: AiProviderConfig): string {
   return `${provider.name || provider.provider} · ${provider.apiMode}`;
 }
 
-function quoteMysqlIdentifier(identifier: string): string {
-  return `\`${identifier.replace(/`/g, '``')}\``;
-}
-
-function mysqlTableRef(tableName: string, dbName?: string): string {
-  return dbName ? `${quoteMysqlIdentifier(dbName)}.${quoteMysqlIdentifier(tableName)}` : quoteMysqlIdentifier(tableName);
-}
+import { mysqlTableRef, quoteMysqlIdentifier } from '../shared/sql/identifiers';
 
 function stripTrailingSemicolon(sql: string): string {
   return sql.trim().replace(/;+\s*$/, '');
@@ -197,13 +173,12 @@ export function App() {
   const [aiPanelWidth, setAiPanelWidth] = useState(300);
   const [aiCollapsed, setAiCollapsed] = useState(() => window.innerWidth < 1360);
   const [editorHeightPx, setEditorHeightPx] = useState<number | null>(null);
-  const resizeRef = useRef<{ target: string; start: number; initial: number } | null>(null);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showDbSelector, setShowDbSelector] = useState(false);
   const [notice, setNotice] = useState('');
   const [activeInlineEditor, setActiveInlineEditor] = useState<{ rowIndex: number; column: string; value: string; asNull: boolean } | null>(null);
   const [pendingEdits, setPendingEdits] = useState<BatchCellEdit[]>([]);
-  const [pendingSqlConfirm, setPendingSqlConfirm] = useState<PendingSqlConfirm | null>(null);
+  const [pendingSqlConfirm, setPendingSqlConfirm] = useState<SqlConfirmData | null>(null);
   const [tableDesignerTarget, setTableDesignerTarget] = useState<{ database: string; table: string } | null>(null);
 
   const activeConnection = connections.find((connection) => connection.id === activeConnectionId) ?? connections[0];
@@ -410,10 +385,6 @@ export function App() {
     if (activeWorkTabId === tabId) {
       setActiveWorkTabId(next[Math.max(0, index - 1)]?.id ?? 'console');
     }
-  }
-
-  function buildTableBrowseSql(table: TableSchema, dbName?: string, limit = 100) {
-    return `${buildTableBaseSql(table, dbName)}\nLIMIT ${limit};`;
   }
 
   function buildTableBaseSql(table: TableSchema, dbName?: string) {
@@ -945,13 +916,12 @@ export function App() {
 
   return (
     <div className={`app-shell theme-${settings.theme ?? 'dark'}`} style={{ gridTemplateColumns: `72px ${sidebarWidth}px ${aiCollapsed ? 'minmax(720px, 1fr)' : 'minmax(640px, 1fr)'} ${aiCollapsed ? 56 : aiPanelWidth}px` }}>
-      <aside className="rail">
-        <div className="brand">DB<span>Mind</span></div>
-        <button className={`rail-btn ${view === 'workspace' ? 'active' : ''}`} title="数据库" onClick={() => setView('workspace')}><Database size={18} /></button>
-        <button className={`rail-btn ${view === 'workspace' && !aiCollapsed ? 'active' : ''}`} title="AI 助手" onClick={() => { setView('workspace'); setAiCollapsed((value) => !value); }}><Sparkles size={18} /></button>
-        <button className="rail-btn" title="历史"><History size={18} /></button>
-        <button className={`rail-btn ${view === 'settings' ? 'active' : ''}`} title="设置" onClick={() => setView('settings')}><Settings size={18} /></button>
-      </aside>
+      <LeftRail
+        view={view}
+        aiCollapsed={aiCollapsed}
+        onNavigate={setView}
+        onToggleAi={() => { setView('workspace'); setAiCollapsed((value) => !value); }}
+      />
 
       {view === 'settings' ? (
         <SettingsView
@@ -1099,49 +1069,30 @@ export function App() {
           </aside>
 
           <main className="workspace" ref={workspaceRef}>
-            <header className="topbar">
-              <div>
-                <h1>{activeWorkTab?.title || activeConnection?.name || '未选择连接'}</h1>
-                <p>{activeConnection ? driverLabel(activeConnection.driver) : 'MySQL'} · {selectedDbs.length} 个数据库 · {allTables.length} 个对象 · {activeWorkTab?.dbName ? `${activeWorkTab.dbName}.${activeWorkTab.tableName}` : defaultProvider ? providerLabel(defaultProvider) : 'Local AI'}</p>
-              </div>
-              <div className="topbar-actions">
-                {activeWorkTab?.kind === 'table' && activeWorkTab.dbName && activeWorkTab.tableName && (
-                  <button
-                    className="ghost"
-                    onClick={() => setTableDesignerTarget({ database: activeWorkTab.dbName!, table: activeWorkTab.tableName! })}
-                    disabled={loading.query || loading.ai}
-                  >
-                    <Edit3 size={15} /> 表设计
-                  </button>
-                )}
-                <button className="ghost" onClick={generateSql} disabled={loading.ai || loading.query}><Wand2 size={15} /> {loading.ai ? '生成中' : 'AI 优化'}</button>
-                <button className="run-btn" onClick={runQuery} disabled={loading.query || loading.ai}><Play size={16} /> {loading.query ? '执行中' : '执行'}</button>
-              </div>
-            </header>
-
-            <div className="work-tab-strip">
-              {workTabs.map((tab) => (
-                <button
-                  className={`work-tab ${tab.id === activeWorkTabId ? 'active' : ''}`}
-                  key={tab.id}
-                  onClick={() => setActiveWorkTabId(tab.id)}
-                  title={tab.dbName ? `${tab.dbName}.${tab.tableName}` : tab.title}
-                >
-                  {tab.kind === 'table' ? <Table2 size={13} /> : <Database size={13} />}
-                  <span>{tab.title}</span>
-                  {tab.id !== 'console' && (
-                    <em
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        closeWorkTab(tab.id);
-                      }}
-                    >
-                      ×
-                    </em>
-                  )}
-                </button>
-              ))}
-            </div>
+            <TopBar
+              workTab={activeWorkTab}
+              connection={activeConnection}
+              selectedDbsCount={selectedDbs.length}
+              tableCount={allTables.length}
+              defaultProvider={defaultProvider}
+              dbName={activeWorkTab?.dbName}
+              tableName={activeWorkTab?.tableName}
+              queryLoading={loading.query}
+              aiLoading={loading.ai}
+              onRunQuery={runQuery}
+              onAiGenerate={generateSql}
+              onDesignTable={() => {
+                if (activeWorkTab?.dbName && activeWorkTab.tableName) {
+                  setTableDesignerTarget({ database: activeWorkTab.dbName, table: activeWorkTab.tableName });
+                }
+              }}
+            />
+            <WorkTabStrip
+              workTabs={workTabs}
+              activeWorkTabId={activeWorkTabId}
+              onSelectTab={setActiveWorkTabId}
+              onCloseTab={closeWorkTab}
+            />
 
             <section className="editor-zone" style={editorHeightPx ? { flex: `0 0 ${editorHeightPx}px` } : { flex: '1 1 50%' }}>
               <div className="editor-toolbar">
@@ -1336,43 +1287,18 @@ export function App() {
         </>
       )}
 
-      {showConnectionModal && (
-        <div className="modal-overlay" onClick={() => setShowConnectionModal(false)}>
-          <div className="modal-content" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-head">
-              <h2>{connectionDraft.id ? '编辑连接' : '新建连接'}</h2>
-              <button className="icon-btn" onClick={() => setShowConnectionModal(false)}>✕</button>
-            </div>
-            <ConnectionForm
-              draft={connectionDraft}
-              databases={databases}
-              onChange={setConnectionDraft}
-              onSave={saveConnection}
-              onTest={testConnection}
-              loading={loading.connection}
-            />
-          </div>
-        </div>
-      )}
+      <ConnectionModal
+        open={showConnectionModal}
+        connectionDraft={connectionDraft}
+        databases={databases}
+        loading={loading.connection}
+        onClose={() => setShowConnectionModal(false)}
+        onChange={setConnectionDraft}
+        onSave={saveConnection}
+        onTest={testConnection}
+      />
 
-      {pendingSqlConfirm && (
-        <div className="modal-overlay" onClick={() => setPendingSqlConfirm(null)}>
-          <div className="modal-content sql-confirm-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-head">
-              <h2>{pendingSqlConfirm.title}</h2>
-              <button className="icon-btn" onClick={() => setPendingSqlConfirm(null)}>✕</button>
-            </div>
-            <p className="modal-note">确认后会执行以下写入 SQL，执行成功后自动刷新当前结果集。</p>
-            <pre className="sql-preview">{pendingSqlConfirm.sql}</pre>
-            <div className="form-actions">
-              <button onClick={() => setPendingSqlConfirm(null)}>取消</button>
-              <button className="primary" onClick={pendingSqlConfirm.onConfirm} disabled={loading.query}>
-                <Save size={14} /> {loading.query ? '执行中' : '确认执行'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SqlConfirmModal data={pendingSqlConfirm} loading={loading.query} onClose={() => setPendingSqlConfirm(null)} />
 
       {tableDesignerTarget && activeConnectionId && (
         <TableDesignerModal
@@ -1395,438 +1321,3 @@ export function App() {
   );
 }
 
-function ConnectionForm({
-  draft,
-  databases,
-  loading,
-  onChange,
-  onSave,
-  onTest
-}: {
-  draft: DbConnectionConfig;
-  databases: DatabaseInfo[];
-  loading: boolean;
-  onChange: (draft: DbConnectionConfig) => void;
-  onSave: () => void;
-  onTest: () => void;
-}) {
-  return (
-    <div className="connection-form">
-      <div className="form-row">
-        <input placeholder="连接名" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
-        <select
-          value={draft.driver}
-          onChange={(event) =>
-            onChange({
-              ...draft,
-              driver: event.target.value as DbConnectionConfig['driver'],
-              port: event.target.value === 'postgres' ? 5432 : 3306
-            })
-          }
-        >
-          <option value="mysql">MySQL</option>
-          <option value="postgres">PostgreSQL</option>
-        </select>
-      </div>
-      <div className="form-row">
-        <input placeholder="Host" value={draft.host} onChange={(event) => onChange({ ...draft, host: event.target.value })} />
-        <input placeholder="Port" value={draft.port} onChange={(event) => onChange({ ...draft, port: Number(event.target.value) })} />
-      </div>
-      {databases.length > 0 ? (
-        <select value={draft.database} onChange={(event) => onChange({ ...draft, database: event.target.value })}>
-          <option value="">选择数据库</option>
-          {databases.map((database) => (
-            <option key={database.name} value={database.name}>{database.system ? `${database.name} · system` : database.name}</option>
-          ))}
-        </select>
-      ) : (
-        <input placeholder="Database" value={draft.database} onChange={(event) => onChange({ ...draft, database: event.target.value })} />
-      )}
-      <div className="form-row">
-        <input placeholder="User" value={draft.user} onChange={(event) => onChange({ ...draft, user: event.target.value })} />
-        <input type="password" placeholder="Password" value={draft.password} onChange={(event) => onChange({ ...draft, password: event.target.value })} />
-      </div>
-      <div className="form-row">
-        <input placeholder="Charset" value={draft.charset} onChange={(event) => onChange({ ...draft, charset: event.target.value })} />
-        <input placeholder="Timeout ms" value={draft.connectTimeout} onChange={(event) => onChange({ ...draft, connectTimeout: Number(event.target.value) })} />
-      </div>
-      <label className="check-row">
-        <input type="checkbox" checked={Boolean(draft.readonly)} onChange={(event) => onChange({ ...draft, readonly: event.target.checked })} />
-        <span>只读模式</span>
-      </label>
-      <div className="form-actions">
-        <button onClick={onTest} disabled={loading}><KeyRound size={14} /> {loading ? '测试中' : '测试'}</button>
-        <button className="primary" onClick={onSave} disabled={loading}><Save size={14} /> {loading ? '保存中' : '保存'}</button>
-      </div>
-    </div>
-  );
-}
-
-function AiPanel({
-  selectedSchema,
-  chat,
-  aiInput,
-  mentionedTables,
-  busy,
-  aiLoading,
-  textareaRef,
-  mentionQuery,
-  mentionOptions,
-  mentionIndex,
-  aiPanelWidth,
-  collapsed,
-  onToggleCollapsed,
-  onStartResize,
-  onInput,
-  onKeyDown,
-  onSelectMention,
-  onGenerate,
-  onSelectTemplate,
-  onCountTemplate,
-  onLoadDdl,
-  onBrowseTable,
-  onDesignTable,
-  onClear
-}: {
-  selectedSchema?: TableSchema;
-  chat: ChatMessage[];
-  aiInput: string;
-  mentionedTables: string[];
-  busy: boolean;
-  aiLoading: boolean;
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
-  mentionQuery: { db: string; table: string; start: number } | null;
-  mentionOptions: { db: string; table: TableSchema }[];
-  mentionIndex: number;
-  aiPanelWidth: number;
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
-  onStartResize: (target: 'sidebar' | 'ai-panel', initialSize: number, e: React.MouseEvent) => void;
-  onInput: (value: string) => void;
-  onKeyDown: (event: React.KeyboardEvent) => void;
-  onSelectMention: (db: string, table: string) => void;
-  onGenerate: () => void;
-  onSelectTemplate: () => void;
-  onCountTemplate: () => void;
-  onLoadDdl: () => void;
-  onBrowseTable: () => void;
-  onDesignTable: () => void;
-  onClear: () => void;
-}) {
-  if (collapsed) {
-    return (
-      <aside className="ai-panel collapsed">
-        <button className="ai-collapsed-btn" title="展开 AI 助手" onClick={onToggleCollapsed}>
-          <Sparkles size={18} />
-          <span>AI</span>
-        </button>
-      </aside>
-    );
-  }
-
-  return (
-    <aside className="ai-panel">
-      <div className="resize-handle-col" onMouseDown={(e) => onStartResize('ai-panel', aiPanelWidth, e)} />
-      <div className="ai-panel-body">
-      <div className="ai-head">
-        <div>
-          <p><Bot size={16} /> AI 助手</p>
-          <strong>@table Schema Context</strong>
-        </div>
-        <button className="icon-btn" title="收起 AI 助手" onClick={onToggleCollapsed}><ChevronDown size={16} /></button>
-      </div>
-
-      <div className="schema-card">
-        <div className="section-label">当前表结构</div>
-        <h2>{selectedSchema?.name ?? '未选择表'}</h2>
-        {selectedSchema && (
-          <div className="table-meta">
-            <span>{selectedSchema.type ?? 'table'}</span>
-            {selectedSchema.engine && <span>{selectedSchema.engine}</span>}
-            {selectedSchema.rowCount !== undefined && <span>~{selectedSchema.rowCount} rows</span>}
-          </div>
-        )}
-        <div className="columns">
-          {selectedSchema?.columns.map((column) => (
-            <div className="column-row" key={column.name}>
-              <span>{column.name}{column.primary ? ' · PK' : ''}{column.references ? ` · FK ${column.references}` : ''}</span>
-              <em>{column.type}</em>
-            </div>
-          ))}
-        </div>
-        <div className="table-actions">
-          <button onClick={onBrowseTable} disabled={!selectedSchema} title="浏览表数据"><Table2 size={13} /> 浏览</button>
-          <button onClick={onDesignTable} disabled={!selectedSchema} title="打开表设计器"><Edit3 size={13} /> 设计</button>
-          <button onClick={onSelectTemplate} disabled={!selectedSchema} title="生成 SELECT">SELECT</button>
-          <button onClick={onCountTemplate} disabled={!selectedSchema} title="生成 COUNT">COUNT</button>
-          <button onClick={onLoadDdl} disabled={!selectedSchema} title="读取 DDL">DDL</button>
-        </div>
-      </div>
-
-      <div className="chat-list">
-        {chat.map((message, index) => (
-          <div className={`chat-message ${message.role}`} key={index}>
-            {message.meta && <div className="meta">{message.meta}</div>}
-            <p>{message.content}</p>
-            {message.sql && <pre>{message.sql}</pre>}
-            {message.warnings?.map((warning) => <div className="warning" key={warning}>{warning}</div>)}
-          </div>
-        ))}
-        {aiLoading && (
-          <div className="chat-message assistant loading-message">
-            <div className="meta">AI 助手</div>
-            <p><span className="spinner" /> 正在生成 SQL...</p>
-          </div>
-        )}
-      </div>
-
-      <div className="composer">
-        <div className="composer-input-wrap">
-          <textarea
-            ref={textareaRef}
-            value={aiInput}
-            placeholder="使用 @ 引用表结构，描述查询需求..."
-            onChange={(event) => onInput(event.target.value)}
-            onKeyDown={onKeyDown}
-          />
-          {mentionQuery && mentionOptions.length > 0 && (
-            <div className="mention-dropdown">
-              {mentionOptions.map((opt, idx) => (
-                <button
-                  key={`${opt.db}.${opt.table.name}`}
-                  className={`mention-item ${idx === mentionIndex ? 'active' : ''}`}
-                  onClick={() => onSelectMention(opt.db, opt.table.name)}
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <span className="mention-db">{opt.db}</span>
-                  <span className="mention-table">{opt.table.name}</span>
-                  <em>{opt.table.columns.length}</em>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="composer-footer">
-          <span>{mentionedTables.length ? `已引用 ${mentionedTables.join(', ')}` : '输入 @ 引用表'}</span>
-          <button onClick={onGenerate} disabled={busy}><Sparkles size={15} /> {aiLoading ? '生成中' : '生成 SQL'}</button>
-          <button className="text-danger" onClick={onClear} title="清空对话"><Trash2 size={14} /></button>
-        </div>
-      </div>
-      </div>
-    </aside>
-  );
-}
-
-function HistoryPanel({
-  history,
-  onUseSql,
-  onClear
-}: {
-  history: QueryHistoryItem[];
-  onUseSql: (sql: string) => void;
-  onClear: () => void;
-}) {
-  if (!history.length) {
-    return <div className="empty-state">暂无查询历史。执行 SQL 后会自动记录最近 200 条。</div>;
-  }
-
-  return (
-    <div className="history-panel">
-      <div className="history-toolbar">
-        <span>最近 {history.length} 条查询</span>
-        <button onClick={onClear}>清空历史</button>
-      </div>
-      {history.map((item) => (
-        <button className="history-item" key={item.id} onClick={() => onUseSql(item.sql)}>
-          <div>
-            <strong>{item.database || item.connectionName}</strong>
-            <span>{new Date(item.createdAt).toLocaleString()} · {item.source ?? 'query'} · {item.rowCount} rows · {item.durationMs}ms</span>
-          </div>
-          <pre>{item.sql}</pre>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function SettingsView({
-  aiDraft,
-  settings,
-  notice,
-  onChange,
-  onSave,
-  onTest,
-  onDefault,
-  onEdit,
-  onDelete,
-  onThemeChange,
-  loading
-}: {
-  aiDraft: AiProviderConfig;
-  settings: AppSettings;
-  notice: string;
-  onChange: (draft: AiProviderConfig) => void;
-  onSave: () => void;
-  onTest: () => void;
-  onDefault: (id: string) => void;
-  onEdit: (provider: AiProviderConfig) => void;
-  onDelete: (id: string) => void;
-  onThemeChange: (theme: AppTheme) => void;
-  loading: boolean;
-}) {
-  const [settingsTab, setSettingsTab] = useState<'general' | 'ai'>('general');
-  const activeTheme = settings.theme ?? 'dark';
-
-  return (
-    <main className="settings-page">
-      <header className="settings-hero">
-        <div>
-          <p>Settings</p>
-          <h1>{settingsTab === 'general' ? '通用配置' : 'AI 模型配置'}</h1>
-          <span>{settingsTab === 'general' ? '调整桌面端显示风格与日常使用偏好。' : '兼容 OpenAI、OpenAI Compatible、Azure OpenAI、Ollama 与自定义 OpenAI 格式服务。'}</span>
-        </div>
-        {settingsTab === 'ai' && (
-          <button className="run-btn" onClick={() => onChange({ ...emptyAiProvider, id: '' })}><Plus size={16} /> 新建配置</button>
-        )}
-      </header>
-
-      <div className="settings-tabs">
-        <button className={settingsTab === 'general' ? 'active' : ''} onClick={() => setSettingsTab('general')}>
-          <Settings size={15} /> 通用配置
-        </button>
-        <button className={settingsTab === 'ai' ? 'active' : ''} onClick={() => setSettingsTab('ai')}>
-          <Sparkles size={15} /> AI 模型配置
-        </button>
-      </div>
-
-      {settingsTab === 'general' ? (
-        <section className="settings-layout general-layout">
-          <div className="settings-card">
-            <div className="settings-card-head">
-              <div>
-                <p>Appearance</p>
-                <h2>界面风格</h2>
-              </div>
-              {notice && <span>{notice}</span>}
-            </div>
-            <div className="theme-options">
-              <button className={`theme-option ${activeTheme === 'dark' ? 'active' : ''}`} onClick={() => onThemeChange('dark')}>
-                <span className="theme-swatch dark"><Moon size={18} /></span>
-                <strong>Dark</strong>
-                <em>深色工作台，适合长时间编写 SQL。</em>
-              </button>
-              <button className={`theme-option ${activeTheme === 'light' ? 'active' : ''}`} onClick={() => onThemeChange('light')}>
-                <span className="theme-swatch light"><Sun size={18} /></span>
-                <strong>Light</strong>
-                <em>浅色界面，高对比表格与清爽面板。</em>
-              </button>
-            </div>
-          </div>
-        </section>
-      ) : (
-      <section className="settings-layout">
-        <div className="settings-card">
-          <div className="settings-card-head">
-            <div>
-              <p>Provider Form</p>
-              <h2>{aiDraft.id ? '编辑 AI 配置' : '新建 AI 配置'}</h2>
-            </div>
-            {notice && <span>{notice}</span>}
-          </div>
-
-          <div className="settings-grid">
-            <label>
-              名称
-              <input value={aiDraft.name} onChange={(event) => onChange({ ...aiDraft, name: event.target.value })} />
-            </label>
-            <label>
-              Provider
-              <select value={aiDraft.provider} onChange={(event) => onChange({ ...aiDraft, provider: event.target.value as AiProviderConfig['provider'] })}>
-                <option value="openai">OpenAI</option>
-                <option value="openai-compatible">OpenAI Compatible</option>
-                <option value="azure-openai">Azure OpenAI</option>
-                <option value="ollama">Ollama</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-            <label>
-              API Mode
-              <select value={aiDraft.apiMode} onChange={(event) => onChange({ ...aiDraft, apiMode: event.target.value as AiProviderConfig['apiMode'] })}>
-                <option value="chat-completions">/v1/chat/completions</option>
-                <option value="responses">/v1/responses</option>
-              </select>
-            </label>
-            <label>
-              Model
-              <input value={aiDraft.model} onChange={(event) => onChange({ ...aiDraft, model: event.target.value })} />
-            </label>
-            <label className="wide">
-              Base URL
-              <input value={aiDraft.baseUrl} onChange={(event) => onChange({ ...aiDraft, baseUrl: event.target.value })} />
-            </label>
-            <label className="wide">
-              API Key
-              <input type="password" value={aiDraft.apiKey ?? ''} onChange={(event) => onChange({ ...aiDraft, apiKey: event.target.value })} />
-            </label>
-            <label>
-              Temperature
-              <input value={aiDraft.temperature} onChange={(event) => onChange({ ...aiDraft, temperature: Number(event.target.value) })} />
-            </label>
-            <label>
-              Max Output Tokens
-              <input value={aiDraft.maxOutputTokens} onChange={(event) => onChange({ ...aiDraft, maxOutputTokens: Number(event.target.value) })} />
-            </label>
-            <label>
-              Timeout ms
-              <input value={aiDraft.timeoutMs} onChange={(event) => onChange({ ...aiDraft, timeoutMs: Number(event.target.value) })} />
-            </label>
-            <label>
-              默认 SQL 方言
-              <select value={aiDraft.defaultDialect} onChange={(event) => onChange({ ...aiDraft, defaultDialect: event.target.value as AiProviderConfig['defaultDialect'] })}>
-                <option value="mysql">MySQL</option>
-                <option value="postgres">PostgreSQL</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="settings-checks">
-            <label><input type="checkbox" checked={Boolean(aiDraft.streaming)} onChange={(event) => onChange({ ...aiDraft, streaming: event.target.checked })} /> 启用流式输出</label>
-            <label><input type="checkbox" checked={Boolean(aiDraft.appendLimit)} onChange={(event) => onChange({ ...aiDraft, appendLimit: event.target.checked })} /> 默认追加 LIMIT</label>
-            <label><input type="checkbox" checked={Boolean(aiDraft.allowWriteSql)} onChange={(event) => onChange({ ...aiDraft, allowWriteSql: event.target.checked })} /> 允许 AI 生成写操作</label>
-          </div>
-
-          <div className="settings-actions">
-            <button onClick={onTest} disabled={loading}><Cpu size={15} /> {loading ? '测试中' : '测试模型'}</button>
-            <button className="primary" onClick={onSave} disabled={loading}><Save size={15} /> {loading ? '保存中' : '保存并设为默认'}</button>
-          </div>
-        </div>
-
-        <div className="settings-card provider-list-card">
-          <div className="settings-card-head">
-            <div>
-              <p>Providers</p>
-              <h2>已保存配置</h2>
-            </div>
-          </div>
-          <div className="provider-list">
-            {settings.aiProviders.map((provider) => (
-              <div className="provider-item" key={provider.id}>
-                <div>
-                  <strong>{provider.name}</strong>
-                  <span>{provider.model} · {provider.apiMode}</span>
-                </div>
-                <div className="provider-actions">
-                  {settings.defaultAiProviderId === provider.id && <CheckCircle2 size={16} className="ok-icon" />}
-                  <button onClick={() => onDefault(provider.id)}>默认</button>
-                  <button onClick={() => onEdit(provider)}><Edit3 size={13} /></button>
-                  <button onClick={() => onDelete(provider.id)}><Trash2 size={13} /></button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-      )}
-    </main>
-  );
-}

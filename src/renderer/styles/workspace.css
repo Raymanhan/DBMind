@@ -1,0 +1,164 @@
+.workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.topbar {
+  flex-shrink: 0;
+  background: rgba(14, 14, 20, 0.72);
+  min-height: 72px;
+  padding: 12px 16px;
+}
+.topbar h1 { margin: 0; font-size: 18px; letter-spacing: 0; }
+.topbar-actions { display: flex; gap: 8px; }
+.topbar-actions button { padding: 0 14px; }
+
+.work-tab-strip {
+  display: flex;
+  align-items: end;
+  gap: 4px;
+  min-height: 38px;
+  padding: 7px 10px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: rgba(10, 10, 15, 0.34);
+  border-bottom: 1px solid var(--border);
+}
+.work-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 220px;
+  height: 31px;
+  padding: 0 9px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  border-bottom-color: transparent;
+  border-radius: 7px 7px 0 0;
+  font-size: 12px;
+}
+.work-tab.active {
+  color: var(--text);
+  background: rgba(17, 17, 24, 0.86);
+  border-color: var(--border-strong);
+  border-bottom-color: rgba(17, 17, 24, 0.86);
+}
+.work-tab span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.work-tab em {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--dim);
+  border-radius: 4px;
+  font-size: 15px;
+  font-style: normal;
+  line-height: 1;
+}
+.work-tab em:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.editor-zone, .result-zone {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-toolbar, .tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 16px;
+  color: var(--dim);
+  background: rgba(17, 17, 24, 0.76);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.editor-zone .sql-editor-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+.sql-editor-backdrop,
+.sql-editor-textarea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 18px 20px;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.8;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+  word-wrap: normal;
+}
+.sql-editor-backdrop {
+  color: #d9d9e6;
+  background: rgba(10, 10, 15, 0.42);
+  pointer-events: none;
+  z-index: 0;
+}
+.sql-editor-backdrop pre,
+.sql-editor-backdrop code {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  tab-size: inherit;
+  background: transparent;
+}
+.sql-editor-textarea {
+  color: transparent;
+  caret-color: #d9d9e6;
+  background: transparent;
+  z-index: 1;
+  -webkit-text-fill-color: transparent;
+}
+.sql-editor-textarea::selection {
+  background: rgba(139, 124, 255, 0.3);
+  -webkit-text-fill-color: transparent;
+}
+.sql-editor-textarea:focus {
+  outline: none;
+  border-color: transparent;
+}
+
+.tabs {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.tabs button {
+  height: 28px;
+  padding: 0 11px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.tabs button.active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+}
+.tabs span { margin-left: auto; color: var(--dim); }
