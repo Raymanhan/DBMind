@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {Database, Edit3, Plus, Save, Trash2} from 'lucide-react';
-import type {AiProviderConfig, DbConnectionConfig, DbmindApi, WorkTab} from '../shared/types';
+import type {AiConversation, AiProviderConfig, ChatMessage, DbConnectionConfig, DbmindApi, WorkTab} from '../shared/types';
 import {AiPanel} from './components/ai/AiPanel';
 import {ConnectionModal} from './components/connection/ConnectionModal';
 import {SqlEditor} from './components/editor/SqlEditor';
@@ -22,13 +22,6 @@ import {browserFallbackApi} from './browserApi';
 import {mysqlTableRef, quoteMysqlIdentifier} from '../shared/sql/identifiers';
 
 type AppView = 'workspace' | 'settings';
-type ChatMessage = {
-    role: 'user' | 'assistant';
-    content: string;
-    sql?: string;
-    meta?: string;
-    warnings?: string[];
-};
 type BatchCellEdit = {
     rowIndex: number;
     column: string;
@@ -213,9 +206,11 @@ export function App() {
     }, [activeWorkTabId]);
 
     const {
-        aiInput, setAiInput, chat, setChat, textareaRef, mentionQuery, mentionIndex,
+        aiInput, setAiInput, activeMessages, textareaRef, mentionQuery, mentionIndex,
         mentionedTables, mentionOptions, handleAiChange, selectMention, handleAiKeyDown,
-        generateSql, insertTableSelect, insertTableCount, loadTableDdl
+        generateSql, insertTableSelect, insertTableCount, loadTableDdl,
+        conversations, activeConversationId,
+        createConversation, switchConversation, deleteConversation, clearAllConversations
     } = useAiAssistant({
         api, allTables, schemaMap, selectedSchema, selectedSchemaDb, selectedTable: selectedTable,
         activeConnection, activeConnectionId, defaultProvider,
@@ -612,7 +607,7 @@ export function App() {
                         onToggleCollapsed={() => setAiCollapsed((value) => !value)}
                         onStartResize={startSideResize}
                         selectedSchema={selectedSchema}
-                        chat={chat}
+                        chat={activeMessages}
                         aiInput={aiInput}
                         mentionedTables={mentionedTables}
                         busy={busy}
@@ -621,6 +616,8 @@ export function App() {
                         mentionQuery={mentionQuery}
                         mentionOptions={mentionOptions}
                         mentionIndex={mentionIndex}
+                        conversations={conversations}
+                        activeConversationId={activeConversationId}
                         onInput={handleAiChange}
                         onKeyDown={handleAiKeyDown}
                         onSelectMention={selectMention}
@@ -636,7 +633,10 @@ export function App() {
                                 table: selectedSchema.name
                             });
                         }}
-                        onClear={() => setChat([])}
+                        onCreateConversation={createConversation}
+                        onSwitchConversation={switchConversation}
+                        onDeleteConversation={deleteConversation}
+                        onClearAllConversations={clearAllConversations}
                     />
                 </>
             )}

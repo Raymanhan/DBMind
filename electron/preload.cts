@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AiGenerateRequest, AiProviderConfig, AiStreamChunk, AppSettings, BatchUpdateCellRequest, DbConnectionConfig, DbmindApi, ExecuteSqlRequest, PreviewSqlRequest, UpdateCellRequest } from '../src/shared/types.js';
+import type { AiConversation, AiGenerateRequest, AiProviderConfig, AiStreamChunk, AppSettings, BatchUpdateCellRequest, DbConnectionConfig, DbmindApi, ExecuteSqlRequest, PreviewSqlRequest, UpdateCellRequest } from '../src/shared/types.js';
 
 const api: DbmindApi = {
   getConnections: () => ipcRenderer.invoke('connections:list'),
@@ -33,7 +33,11 @@ const api: DbmindApi = {
       ipcRenderer.on('ai:stream-chunk', handler);
       ipcRenderer.send('ai:generate-sql-stream', input);
     });
-  }
+  },
+  listAiConversations: () => ipcRenderer.invoke('ai:list-conversations'),
+  saveAiConversation: (conv: AiConversation) => ipcRenderer.invoke('ai:save-conversation', conv),
+  deleteAiConversation: (id: string) => ipcRenderer.invoke('ai:delete-conversation', id),
+  clearAiConversations: () => ipcRenderer.invoke('ai:clear-conversations')
 };
 
 contextBridge.exposeInMainWorld('dbmind', api);

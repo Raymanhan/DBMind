@@ -1,14 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Bot, ChevronDown, Edit3, Sparkles, Table2, Trash2 } from 'lucide-react';
-import type { TableSchema } from '../../../shared/types';
-
-type ChatMessage = {
-  role: 'user' | 'assistant';
-  content: string;
-  sql?: string;
-  meta?: string;
-  warnings?: string[];
-};
+import { Bot, ChevronDown, Edit3, Plus, Sparkles, Table2, Trash2 } from 'lucide-react';
+import type { AiConversation, ChatMessage, TableSchema } from '../../../shared/types';
+import { ConversationSwitcher } from './ConversationSwitcher';
 
 export function AiPanel({
   selectedSchema,
@@ -21,6 +14,8 @@ export function AiPanel({
   mentionQuery,
   mentionOptions,
   mentionIndex,
+  conversations,
+  activeConversationId,
   aiPanelWidth,
   collapsed,
   onToggleCollapsed,
@@ -34,7 +29,10 @@ export function AiPanel({
   onLoadDdl,
   onBrowseTable,
   onDesignTable,
-  onClear
+  onCreateConversation,
+  onSwitchConversation,
+  onDeleteConversation,
+  onClearAllConversations
 }: {
   selectedSchema?: TableSchema;
   chat: ChatMessage[];
@@ -46,6 +44,8 @@ export function AiPanel({
   mentionQuery: { db: string; table: string; start: number } | null;
   mentionOptions: { db: string; table: TableSchema }[];
   mentionIndex: number;
+  conversations: AiConversation[];
+  activeConversationId: string;
   aiPanelWidth: number;
   collapsed: boolean;
   onToggleCollapsed: () => void;
@@ -59,7 +59,10 @@ export function AiPanel({
   onLoadDdl: () => void;
   onBrowseTable: () => void;
   onDesignTable: () => void;
-  onClear: () => void;
+  onCreateConversation: () => void;
+  onSwitchConversation: (id: string) => void;
+  onDeleteConversation: (id: string) => void;
+  onClearAllConversations: () => void;
 }) {
   const mentionListRef = useRef<HTMLDivElement>(null);
 
@@ -89,7 +92,14 @@ export function AiPanel({
       <div className="ai-head">
         <div>
           <p><Bot size={16} /> AI 助手</p>
-          <strong>@table Schema Context</strong>
+          <ConversationSwitcher
+            conversations={conversations}
+            activeId={activeConversationId}
+            onCreateNew={onCreateConversation}
+            onSwitch={onSwitchConversation}
+            onDelete={onDeleteConversation}
+            onClearAll={onClearAllConversations}
+          />
         </div>
         <button className="icon-btn" title="收起 AI 助手" onClick={onToggleCollapsed}><ChevronDown size={16} /></button>
       </div>
@@ -167,7 +177,7 @@ export function AiPanel({
         <div className="composer-footer">
           <span>{mentionedTables.length ? `已引用 ${mentionedTables.join(', ')}` : '输入 @ 引用表'}</span>
           <button onClick={onGenerate} disabled={busy}><Sparkles size={15} /> {aiLoading ? '生成中' : '生成 SQL'}</button>
-          <button className="text-danger" onClick={onClear} title="清空对话"><Trash2 size={14} /></button>
+          <button className="text-danger" onClick={onCreateConversation} title="新建对话"><Plus size={14} /></button>
         </div>
       </div>
       </div>

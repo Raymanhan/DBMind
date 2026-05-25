@@ -12,6 +12,7 @@ import './styles/workspace.css';
 import './styles/datatable.css';
 import './styles/schema-card.css';
 import './styles/composer.css';
+import './styles/conversation-switcher.css';
 import './styles/history.css';
 import './styles/settings.css';
 import './styles/modals.css';

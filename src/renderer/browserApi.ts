@@ -105,5 +105,9 @@ export const browserFallbackApi: DbmindApi = {
   async generateSqlStream(input: AiGenerateRequest, onChunk) {
     const result = await this.generateSql(input);
     onChunk({ done: true, sql: result.sql, explanation: result.explanation, source: result.source, usedTables: result.usedTables, warnings: result.warnings });
-  }
+  },
+  async listAiConversations() { return []; },
+  async saveAiConversation() { return []; },
+  async deleteAiConversation() { return []; },
+  async clearAiConversations() { return []; }
 };

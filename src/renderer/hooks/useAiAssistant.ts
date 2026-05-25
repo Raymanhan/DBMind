@@ -1,10 +1,28 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
-import type { AiGenerateResponse, AiProviderConfig, DbmindApi, TableSchema } from '../../shared/types';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import type { AiConversation, AiGenerateResponse, AiProviderConfig, ChatMessage, DbmindApi, TableSchema } from '../../shared/types';
 import { extractTableMentions } from '../../shared/sqlTools';
 import { quoteMysqlIdentifier } from '../../shared/sql/identifiers';
 import type { WorkTab } from '../../shared/types';
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string; sql?: string; meta?: string; warnings?: string[] };
+const welcomeMessage: ChatMessage = {
+  role: 'assistant',
+  content: '选择表后在输入框使用 @table 描述查询需求，我会把 SQL 生成到控制台。',
+  meta: 'AI 助手 · Schema-aware'
+};
+
+function makeConversation(id: string): AiConversation {
+  return {
+    id,
+    title: '新对话',
+    messages: [welcomeMessage],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function titleFromMessage(content: string): string {
+  return content.length > 40 ? content.slice(0, 40).trimEnd() + '...' : content;
+}
 
 export function useAiAssistant({
   api, allTables, schemaMap, selectedSchema, selectedSchemaDb, selectedTable,
@@ -27,12 +45,23 @@ export function useAiAssistant({
   mysqlTableRef: (table: string, db?: string) => string;
 }) {
   const [aiInput, setAiInput] = useState('');
-  const [chat, setChat] = useState<ChatMessage[]>([
-    { role: 'assistant', content: '选择表后在输入框使用 @table 描述查询需求，我会把 SQL 生成到控制台。', meta: 'AI 助手 · Schema-aware' }
-  ]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [mentionQuery, setMentionQuery] = useState<{ db: string; table: string; start: number } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+
+  const [conversations, setConversations] = useState<AiConversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState('');
+  const [conversationsLoaded, setConversationsLoaded] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+  const activeConvIdRef = useRef(activeConversationId);
+  activeConvIdRef.current = activeConversationId;
+
+  const activeMessages = useMemo(() => {
+    const conv = conversations.find((c) => c.id === activeConversationId);
+    return conv?.messages ?? [welcomeMessage];
+  }, [conversations, activeConversationId]);
 
   const mentionedTables = useMemo(() => extractTableMentions(aiInput), [aiInput]);
 
@@ -50,6 +79,35 @@ export function useAiAssistant({
     }
     return result;
   }, [mentionQuery, schemaMap]);
+
+  useEffect(() => {
+    api.listAiConversations().then((saved) => {
+      if (saved.length > 0) {
+        setConversations(saved);
+        setActiveConversationId(saved[0].id);
+      } else {
+        const id = crypto.randomUUID();
+        setConversations([makeConversation(id)]);
+        setActiveConversationId(id);
+      }
+      setConversationsLoaded(true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!conversationsLoaded) return;
+    const conv = conversations.find((c) => c.id === activeConversationId);
+    if (!conv || conv.messages.length <= 1) return;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const latest = conversationsRef.current.find((c) => c.id === activeConvIdRef.current);
+      if (latest) {
+        api.saveAiConversation({ ...latest, updatedAt: new Date().toISOString() });
+      }
+    }, 500);
+    return () => clearTimeout(saveTimerRef.current);
+  }, [activeMessages, conversationsLoaded, activeConversationId, api]);
 
   const handleAiChange = useCallback((value: string) => {
     setAiInput(value);
@@ -88,6 +146,44 @@ export function useAiAssistant({
     }
   }, [mentionQuery, mentionOptions, mentionIndex, selectMention]);
 
+  const createConversation = useCallback(() => {
+    const id = crypto.randomUUID();
+    setConversations((prev) => [makeConversation(id), ...prev]);
+    setActiveConversationId(id);
+    setAiInput('');
+  }, []);
+
+  const switchConversation = useCallback((id: string) => {
+    setActiveConversationId(id);
+  }, []);
+
+  const deleteConversation = useCallback((id: string) => {
+    api.deleteAiConversation(id);
+    setConversations((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      if (next.length === 0) {
+        const newId = crypto.randomUUID();
+        setActiveConversationId(newId);
+        return [makeConversation(newId)];
+      }
+      return next;
+    });
+    if (id === activeConversationId) {
+      setConversations((prev) => {
+        if (prev.length > 0) setActiveConversationId(prev[0].id);
+        return prev;
+      });
+    }
+  }, [activeConversationId, api]);
+
+  const clearAllConversations = useCallback(() => {
+    api.clearAiConversations();
+    const id = crypto.randomUUID();
+    setConversations([makeConversation(id)]);
+    setActiveConversationId(id);
+    setAiInput('');
+  }, [api]);
+
   const generateSql = useCallback(async () => {
     setLoadingFlag('ai', true);
     const names = extractTableMentions(aiInput);
@@ -103,71 +199,118 @@ export function useAiAssistant({
       }
     }
     const context = tables.length ? tables : selectedSchema ? [selectedSchema] : [];
-    setChat((items) => [...items, { role: 'user', content: aiInput }]);
     const request = { prompt: aiInput, dialect: (activeConnection?.driver as 'mysql' | 'postgres') ?? 'mysql', tables: context };
+
+    const currentConvId = activeConvIdRef.current;
+    const userMsg: ChatMessage = { role: 'user', content: aiInput };
+
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id !== currentConvId) return c;
+        const needsTitle = c.title === '新对话' && c.messages.filter((m) => m.role !== 'assistant' || m.content).length <= 1;
+        return {
+          ...c,
+          title: needsTitle ? titleFromMessage(aiInput) : c.title,
+          messages: [...c.messages, userMsg],
+          updatedAt: new Date().toISOString()
+        };
+      })
+    );
 
     const useStream = defaultProvider?.streaming === true && api.generateSqlStream;
     if (!useStream) {
       try {
         const response: AiGenerateResponse = await api.generateSql(request);
+        const assistantMsg: ChatMessage = {
+          role: 'assistant', content: response.explanation, sql: response.sql, warnings: response.warnings,
+          meta: `${response.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${response.usedTables.join(', ') || selectedTable}`
+        };
+        setConversations((prev) =>
+          prev.map((c) => c.id === currentConvId
+            ? { ...c, messages: [...c.messages, assistantMsg], updatedAt: new Date().toISOString() }
+            : c)
+        );
         updateActiveWorkTab({ baseSql: response.sql, sql: response.sql, sort: undefined });
-        setChat((items) => [...items, { role: 'assistant', content: response.explanation, sql: response.sql, warnings: response.warnings, meta: `${response.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${response.usedTables.join(', ') || selectedTable}` }]);
       } catch (error) {
-        setChat((items) => [...items, { role: 'assistant', content: error instanceof Error ? error.message : 'AI 生成失败', meta: 'AI 错误' }]);
+        setConversations((prev) =>
+          prev.map((c) => c.id === currentConvId
+            ? { ...c, messages: [...c.messages, { role: 'assistant', content: error instanceof Error ? error.message : 'AI 生成失败', meta: 'AI 错误' }], updatedAt: new Date().toISOString() }
+            : c)
+        );
       } finally { setLoadingFlag('ai', false); }
       return;
     }
 
     // Streaming mode
-    const msgIndex = chat.length + 1; // index of the new assistant message (0-based)
-    setChat((items) => [...items, { role: 'assistant', content: '', meta: `${defaultProvider?.name ?? 'AI'} · 生成中...` }]);
+    const convBefore = conversationsRef.current.find((c) => c.id === currentConvId);
+    const msgIndex = (convBefore?.messages.length ?? 0);
+
+    const initialMeta = `${defaultProvider?.name ?? 'AI'} · 生成中...`;
+    setConversations((prev) =>
+      prev.map((c) => c.id === currentConvId
+        ? { ...c, messages: [...c.messages, { role: 'assistant', content: '', meta: initialMeta }], updatedAt: new Date().toISOString() }
+        : c)
+    );
+
     let streamedContent = '';
 
     try {
       await api.generateSqlStream(request, (chunk) => {
         if (chunk.error) {
-          setChat((items) => {
-            const copy = [...items];
-            copy[msgIndex] = { role: 'assistant', content: chunk.error!, meta: 'AI 错误' };
-            return copy;
-          });
+          setConversations((prev) =>
+            prev.map((c) => {
+              if (c.id !== currentConvId) return c;
+              const msgs = [...c.messages];
+              msgs[msgIndex] = { role: 'assistant' as const, content: chunk.error!, meta: 'AI 错误' };
+              return { ...c, messages: msgs };
+            })
+          );
           setLoadingFlag('ai', false);
           return;
         }
         if (chunk.token) {
           streamedContent += chunk.token;
-          setChat((items) => {
-            const copy = [...items];
-            copy[msgIndex] = { ...copy[msgIndex] as ChatMessage, content: streamedContent };
-            return copy;
-          });
+          setConversations((prev) =>
+            prev.map((c) => {
+              if (c.id !== currentConvId) return c;
+              const msgs = [...c.messages];
+              msgs[msgIndex] = { ...msgs[msgIndex] as ChatMessage, content: streamedContent };
+              return { ...c, messages: msgs };
+            })
+          );
         }
         if (chunk.done && chunk.sql) {
           updateActiveWorkTab({ baseSql: chunk.sql, sql: chunk.sql, sort: undefined });
-          setChat((items) => {
-            const copy = [...items];
-            copy[msgIndex] = {
-              role: 'assistant',
-              content: chunk.explanation || streamedContent,
-              sql: chunk.sql,
-              warnings: chunk.warnings,
-              meta: `${chunk.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${(chunk.usedTables || []).join(', ') || selectedTable}`
-            };
-            return copy;
-          });
+          setConversations((prev) =>
+            prev.map((c) => {
+              if (c.id !== currentConvId) return c;
+              const msgs = [...c.messages];
+              msgs[msgIndex] = {
+                role: 'assistant',
+                content: chunk.explanation || streamedContent,
+                sql: chunk.sql,
+                warnings: chunk.warnings,
+                meta: `${chunk.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${(chunk.usedTables || []).join(', ') || selectedTable}`
+              };
+              return { ...c, messages: msgs, updatedAt: new Date().toISOString() };
+            })
+          );
           setLoadingFlag('ai', false);
         }
       });
     } catch (error) {
-      setChat((items) => {
-        const copy = [...items];
-        copy[msgIndex] = { role: 'assistant', content: error instanceof Error ? error.message : 'AI 生成失败', meta: 'AI 错误' };
-        return copy;
-      });
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== currentConvId) return c;
+          const msgs = [...c.messages];
+          msgs[msgIndex] = { role: 'assistant' as const, content: error instanceof Error ? error.message : 'AI 生成失败', meta: 'AI 错误' };
+          return { ...c, messages: msgs, updatedAt: new Date().toISOString() };
+        })
+      );
     } finally {
       setLoadingFlag('ai', false);
     }
-  }, [aiInput, schemaMap, allTables, selectedSchema, api, activeConnection, updateActiveWorkTab, defaultProvider, setLoadingFlag, selectedTable, chat.length]);
+  }, [aiInput, schemaMap, allTables, selectedSchema, api, activeConnection, updateActiveWorkTab, defaultProvider, setLoadingFlag, selectedTable]);
 
   const insertTableSelect = useCallback((limit = 100) => {
     if (!selectedSchema) { setNotice('请先选择一张表。'); return; }
@@ -196,11 +339,12 @@ export function useAiAssistant({
 
   const browseSelectedTable = useCallback(() => {
     if (!selectedSchema) { setNotice('请先选择一张表。'); return; }
-    // Caller passes openTableTab
   }, [selectedSchema, setNotice]);
 
   return {
-    aiInput, setAiInput, chat, setChat,
+    aiInput, setAiInput,
+    conversations, activeConversationId, activeMessages,
+    createConversation, switchConversation, deleteConversation, clearAllConversations,
     textareaRef, mentionQuery, mentionIndex, mentionedTables, mentionOptions,
     handleAiChange, selectMention, handleAiKeyDown,
     generateSql, insertTableSelect, insertTableCount, loadTableDdl, browseSelectedTable

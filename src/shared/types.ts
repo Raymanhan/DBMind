@@ -143,6 +143,22 @@ export interface AiStreamChunk {
   error?: string;
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  sql?: string;
+  meta?: string;
+  warnings?: string[];
+}
+
+export interface AiConversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type AiProviderType = 'openai' | 'openai-compatible' | 'azure-openai' | 'ollama' | 'custom';
 export type AiApiMode = 'responses' | 'chat-completions';
 export type AppTheme = 'dark' | 'light';
@@ -254,4 +270,8 @@ export interface DbmindApi {
   testAiProvider(config: AiProviderConfig): Promise<{ ok: boolean; message: string }>;
   generateSql(input: AiGenerateRequest): Promise<AiGenerateResponse>;
   generateSqlStream(input: AiGenerateRequest, onChunk: (chunk: AiStreamChunk) => void): Promise<void>;
+  listAiConversations(): Promise<AiConversation[]>;
+  saveAiConversation(conversation: AiConversation): Promise<AiConversation[]>;
+  deleteAiConversation(id: string): Promise<AiConversation[]>;
+  clearAiConversations(): Promise<AiConversation[]>;
 }
