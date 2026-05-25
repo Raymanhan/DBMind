@@ -104,14 +104,70 @@ export function useAiAssistant({
     }
     const context = tables.length ? tables : selectedSchema ? [selectedSchema] : [];
     setChat((items) => [...items, { role: 'user', content: aiInput }]);
+    const request = { prompt: aiInput, dialect: (activeConnection?.driver as 'mysql' | 'postgres') ?? 'mysql', tables: context };
+
+    const useStream = defaultProvider?.streaming === true && api.generateSqlStream;
+    if (!useStream) {
+      try {
+        const response: AiGenerateResponse = await api.generateSql(request);
+        updateActiveWorkTab({ baseSql: response.sql, sql: response.sql, sort: undefined });
+        setChat((items) => [...items, { role: 'assistant', content: response.explanation, sql: response.sql, warnings: response.warnings, meta: `${response.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${response.usedTables.join(', ') || selectedTable}` }]);
+      } catch (error) {
+        setChat((items) => [...items, { role: 'assistant', content: error instanceof Error ? error.message : 'AI 生成失败', meta: 'AI 错误' }]);
+      } finally { setLoadingFlag('ai', false); }
+      return;
+    }
+
+    // Streaming mode
+    const msgIndex = chat.length + 1; // index of the new assistant message (0-based)
+    setChat((items) => [...items, { role: 'assistant', content: '', meta: `${defaultProvider?.name ?? 'AI'} · 生成中...` }]);
+    let streamedContent = '';
+
     try {
-      const response: AiGenerateResponse = await api.generateSql({ prompt: aiInput, dialect: (activeConnection?.driver as 'mysql' | 'postgres') ?? 'mysql', tables: context });
-      updateActiveWorkTab({ baseSql: response.sql, sql: response.sql, sort: undefined });
-      setChat((items) => [...items, { role: 'assistant', content: response.explanation, sql: response.sql, warnings: response.warnings, meta: `${response.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${response.usedTables.join(', ') || selectedTable}` }]);
+      await api.generateSqlStream(request, (chunk) => {
+        if (chunk.error) {
+          setChat((items) => {
+            const copy = [...items];
+            copy[msgIndex] = { role: 'assistant', content: chunk.error!, meta: 'AI 错误' };
+            return copy;
+          });
+          setLoadingFlag('ai', false);
+          return;
+        }
+        if (chunk.token) {
+          streamedContent += chunk.token;
+          setChat((items) => {
+            const copy = [...items];
+            copy[msgIndex] = { ...copy[msgIndex] as ChatMessage, content: streamedContent };
+            return copy;
+          });
+        }
+        if (chunk.done && chunk.sql) {
+          updateActiveWorkTab({ baseSql: chunk.sql, sql: chunk.sql, sort: undefined });
+          setChat((items) => {
+            const copy = [...items];
+            copy[msgIndex] = {
+              role: 'assistant',
+              content: chunk.explanation || streamedContent,
+              sql: chunk.sql,
+              warnings: chunk.warnings,
+              meta: `${chunk.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${(chunk.usedTables || []).join(', ') || selectedTable}`
+            };
+            return copy;
+          });
+          setLoadingFlag('ai', false);
+        }
+      });
     } catch (error) {
-      setChat((items) => [...items, { role: 'assistant', content: error instanceof Error ? error.message : 'AI 生成失败', meta: 'AI 错误' }]);
-    } finally { setLoadingFlag('ai', false); }
-  }, [aiInput, schemaMap, allTables, selectedSchema, api, activeConnection, updateActiveWorkTab, defaultProvider, setLoadingFlag, selectedTable]);
+      setChat((items) => {
+        const copy = [...items];
+        copy[msgIndex] = { role: 'assistant', content: error instanceof Error ? error.message : 'AI 生成失败', meta: 'AI 错误' };
+        return copy;
+      });
+    } finally {
+      setLoadingFlag('ai', false);
+    }
+  }, [aiInput, schemaMap, allTables, selectedSchema, api, activeConnection, updateActiveWorkTab, defaultProvider, setLoadingFlag, selectedTable, chat.length]);
 
   const insertTableSelect = useCallback((limit = 100) => {
     if (!selectedSchema) { setNotice('请先选择一张表。'); return; }

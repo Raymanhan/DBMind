@@ -132,6 +132,17 @@ export interface AiGenerateResponse {
   warnings: string[];
 }
 
+export interface AiStreamChunk {
+  token?: string;
+  done?: boolean;
+  sql?: string;
+  explanation?: string;
+  source?: 'openai' | 'openai-compatible' | 'local';
+  usedTables?: string[];
+  warnings?: string[];
+  error?: string;
+}
+
 export type AiProviderType = 'openai' | 'openai-compatible' | 'azure-openai' | 'ollama' | 'custom';
 export type AiApiMode = 'responses' | 'chat-completions';
 export type AppTheme = 'dark' | 'light';
@@ -242,4 +253,5 @@ export interface DbmindApi {
   saveSettings(settings: AppSettings): Promise<AppSettings>;
   testAiProvider(config: AiProviderConfig): Promise<{ ok: boolean; message: string }>;
   generateSql(input: AiGenerateRequest): Promise<AiGenerateResponse>;
+  generateSqlStream(input: AiGenerateRequest, onChunk: (chunk: AiStreamChunk) => void): Promise<void>;
 }

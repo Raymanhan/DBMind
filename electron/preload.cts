@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AiGenerateRequest, AiProviderConfig, AppSettings, BatchUpdateCellRequest, DbConnectionConfig, DbmindApi, ExecuteSqlRequest, PreviewSqlRequest, UpdateCellRequest } from '../src/shared/types.js';
+import type { AiGenerateRequest, AiProviderConfig, AiStreamChunk, AppSettings, BatchUpdateCellRequest, DbConnectionConfig, DbmindApi, ExecuteSqlRequest, PreviewSqlRequest, UpdateCellRequest } from '../src/shared/types.js';
 
 const api: DbmindApi = {
   getConnections: () => ipcRenderer.invoke('connections:list'),
@@ -20,7 +20,20 @@ const api: DbmindApi = {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings: AppSettings) => ipcRenderer.invoke('settings:save', settings),
   testAiProvider: (config: AiProviderConfig) => ipcRenderer.invoke('ai:test-provider', config),
-  generateSql: (input: AiGenerateRequest) => ipcRenderer.invoke('ai:generate-sql', input)
+  generateSql: (input: AiGenerateRequest) => ipcRenderer.invoke('ai:generate-sql', input),
+  generateSqlStream(input: AiGenerateRequest, onChunk: (chunk: AiStreamChunk) => void) {
+    return new Promise<void>((resolve) => {
+      const handler = (_event: Electron.IpcRendererEvent, chunk: AiStreamChunk) => {
+        onChunk(chunk);
+        if (chunk.done || chunk.error) {
+          ipcRenderer.removeListener('ai:stream-chunk', handler);
+          resolve();
+        }
+      };
+      ipcRenderer.on('ai:stream-chunk', handler);
+      ipcRenderer.send('ai:generate-sql-stream', input);
+    });
+  }
 };
 
 contextBridge.exposeInMainWorld('dbmind', api);

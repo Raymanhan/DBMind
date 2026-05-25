@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Bot, ChevronDown, Edit3, Sparkles, Table2, Trash2 } from 'lucide-react';
 import type { TableSchema } from '../../../shared/types';
 
@@ -60,6 +61,16 @@ export function AiPanel({
   onDesignTable: () => void;
   onClear: () => void;
 }) {
+  const mentionListRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!mentionQuery || mentionOptions.length === 0) return;
+    const container = mentionListRef.current;
+    if (!container) return;
+    const active = container.querySelector<HTMLElement>('.mention-item.active');
+    active?.scrollIntoView({ block: 'nearest' });
+  }, [mentionIndex, mentionQuery, mentionOptions.length]);
+
   if (collapsed) {
     return (
       <aside className="ai-panel collapsed">
@@ -137,7 +148,7 @@ export function AiPanel({
             onKeyDown={onKeyDown}
           />
           {mentionQuery && mentionOptions.length > 0 && (
-            <div className="mention-dropdown">
+            <div className="mention-dropdown" ref={mentionListRef}>
               {mentionOptions.map((opt, idx) => (
                 <button
                   key={`${opt.db}.${opt.table.name}`}

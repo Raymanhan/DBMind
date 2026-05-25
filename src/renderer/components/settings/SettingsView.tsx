@@ -11,7 +11,7 @@ const emptyAiProvider: AiProviderConfig = {
   temperature: 0.2,
   maxOutputTokens: 1200,
   timeoutMs: 30000,
-  streaming: false,
+  streaming: true,
   defaultDialect: 'mysql',
   allowWriteSql: false,
   appendLimit: true

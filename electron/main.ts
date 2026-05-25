@@ -41,7 +41,7 @@ const defaultAiProvider: AiProviderConfig = {
   temperature: 0.2,
   maxOutputTokens: 1200,
   timeoutMs: 30000,
-  streaming: false,
+  streaming: true,
   defaultDialect: 'mysql',
   allowWriteSql: false,
   appendLimit: true
@@ -414,6 +414,91 @@ ${buildSchemaPrompt(input.tables, input.dialect)}
   }
 }
 
+async function* callAiProviderStream(input: AiGenerateRequest, provider: AiProviderConfig): AsyncGenerator<string> {
+  const apiKey = provider.apiKey || process.env.OPENAI_API_KEY;
+  if (!apiKey && provider.provider !== 'ollama') {
+    yield JSON.stringify({ error: '未配置 API Key' });
+    return;
+  }
+
+  const prompt = `数据库方言：${input.dialect}
+
+Schema:
+${buildSchemaPrompt(input.tables, input.dialect)}
+
+用户需求：${input.prompt}`;
+
+  const instructions =
+    '你是 DBMind 的 SQL 生成引擎。只返回 JSON：{"sql": "...", "explanation": "..."}。必须只使用给定 schema 中的表和字段。SQL 中的表名必须与 schema 中给出的完全一致（含反引号引用的库名和表名）。默认生成只读 SELECT，除非用户明确要求写操作且应用配置允许。';
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+  try {
+    const baseUrl = normalizeBaseUrl(provider.baseUrl || defaultAiProvider.baseUrl);
+    const endpoint = `${baseUrl}/chat/completions`;
+
+    const body = {
+      model: provider.model,
+      temperature: provider.temperature,
+      max_tokens: provider.maxOutputTokens,
+      stream: true,
+      messages: [
+        { role: 'system', content: instructions },
+        { role: 'user', content: prompt }
+      ]
+    };
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      yield JSON.stringify({ error: `AI 请求失败：${response.status}` });
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) { yield JSON.stringify({ error: '无法读取流式响应' }); return; }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') return;
+          try {
+            const parsed = JSON.parse(data) as { choices?: { delta?: { content?: string } }[] };
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) yield content;
+          } catch { /* skip unparseable chunks */ }
+        }
+      }
+    }
+
+    if (buffer.startsWith('data: ') && buffer.slice(6).trim() !== '[DONE]') {
+      try {
+        const parsed = JSON.parse(buffer.slice(6).trim()) as { choices?: { delta?: { content?: string } }[] };
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) yield content;
+      } catch { /* skip */ }
+    }
+  } catch (error) {
+    yield JSON.stringify({ error: error instanceof Error ? error.message : '流式请求失败' });
+  }
+}
+
 async function generateSql(input: AiGenerateRequest): Promise<AiGenerateResponse> {
   let source: AiGenerateResponse['source'] = 'local';
   let sql = localSqlFromPrompt(input.prompt, input.tables, input.dialect);
@@ -572,6 +657,49 @@ app.whenReady().then(() => {
   ipcMain.handle('settings:save', async (_event, settings: AppSettings) => writeSettings(settings));
   ipcMain.handle('ai:test-provider', async (_event, config: AiProviderConfig) => testAiProvider(config));
   ipcMain.handle('ai:generate-sql', async (_event, input: AiGenerateRequest) => generateSql(input));
+  ipcMain.on('ai:generate-sql-stream', async (event, input: AiGenerateRequest) => {
+    try {
+      const settings = await readSettings();
+      const provider = settings.aiProviders.find((item) => item.id === settings.defaultAiProviderId) ?? settings.aiProviders[0];
+      if (!provider || !provider.streaming) {
+        // Fall back to non-streaming
+        const result = await generateSql(input);
+        event.sender.send('ai:stream-chunk', { done: true, sql: result.sql, explanation: result.explanation, source: result.source, usedTables: result.usedTables, warnings: result.warnings });
+        return;
+      }
+
+      let fullText = '';
+      for await (const chunk of callAiProviderStream(input, provider)) {
+        try {
+          const err = JSON.parse(chunk) as { error?: string };
+          if (err.error) {
+            event.sender.send('ai:stream-chunk', { error: err.error });
+            return;
+          }
+        } catch {}
+        fullText += chunk;
+        event.sender.send('ai:stream-chunk', { token: chunk });
+      }
+
+      const parsed = extractJsonObject(fullText);
+      let sql = localSqlFromPrompt(input.prompt, input.tables, input.dialect);
+      let explanation = '已根据 @table 引用的表结构生成 SQL。';
+      let source: AiGenerateResponse['source'] = 'local';
+      if (parsed?.sql) {
+        sql = parsed.sql;
+        explanation = parsed.explanation ?? `已通过 ${provider.name} 生成 SQL。`;
+        source = provider.provider === 'openai' ? 'openai' : 'openai-compatible';
+      }
+      sql = addLimitIfSelect(sql);
+      event.sender.send('ai:stream-chunk', {
+        done: true, sql, explanation, source,
+        usedTables: input.tables.map((t) => t.name),
+        warnings: validateSql(sql)
+      });
+    } catch (error) {
+      event.sender.send('ai:stream-chunk', { error: error instanceof Error ? error.message : 'AI 生成失败' });
+    }
+  });
 
   createWindow();
   app.on('activate', () => {
