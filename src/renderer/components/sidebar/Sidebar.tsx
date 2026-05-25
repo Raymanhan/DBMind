@@ -1,5 +1,9 @@
-import { ChevronDown, Database, Edit3, Plus, RefreshCw, Search, Table2, Trash2 } from 'lucide-react';
+import { ChevronDown, Circle, Database, Edit3, Plus, RefreshCw, Search, Table2, Trash2 } from 'lucide-react';
 import type { DatabaseInfo, DbConnectionConfig, TableSchema } from '../../../shared/types';
+
+function tableKey(db: string, table: string): string {
+  return `${db}.${table}`;
+}
 
 export function Sidebar({
   activeConnection,
@@ -64,12 +68,15 @@ export function Sidebar({
   onOpenTableTab: (db: string, t: TableSchema) => void;
   onStartResize: (target: 'sidebar', size: number, e: React.MouseEvent) => void;
 }) {
+  const selectedObjectsCount = selectedDbs.reduce((total, dbName) => total + (schemaMap[dbName]?.length ?? 0), 0);
+
   return (
     <aside className="sidebar">
       <div className="panel-head">
-        <div>
+        <div className="panel-title">
           <p>连接</p>
           <strong>{activeConnection?.name ?? '未连接'}</strong>
+          <span><Circle size={7} fill="currentColor" /> {activeConnection ? (activeConnection.driver === 'postgres' ? 'PostgreSQL' : 'MySQL') : '等待连接'}</span>
         </div>
         <button className="icon-btn" title="新建连接" onClick={onNewConnection}><Plus size={16} /></button>
       </div>
@@ -83,7 +90,7 @@ export function Sidebar({
         ) : connections.map((c) => (
           <div className={`connection-item ${c.id === activeConnectionId ? 'active' : ''}`} key={c.id}>
             <button className="connection-main" onClick={() => onSelectConnection(c.id)}>
-              <Database size={15} />
+              <span className="connection-icon"><Database size={15} /></span>
               <span>{c.name}</span>
               <em>{c.driver === 'postgres' ? 'PostgreSQL' : 'MySQL'}</em>
             </button>
@@ -98,6 +105,7 @@ export function Sidebar({
       <div className="object-browser">
         <div className="section-title-row">
           <div className="section-label">对象</div>
+          <span className="section-count">{selectedObjectsCount}</span>
         </div>
         {activeConnection?.driver === 'mysql' && databases.length > 0 && (
           <div className="db-multi-select">
@@ -151,18 +159,22 @@ export function Sidebar({
                 <span>{dbName}</span>
                 <em>{tables.length}</em>
               </button>
-              {expandedDbs.has(dbName) && tables.map((t) => (
-                <button
-                  className={`table-item ${t.name === selectedTable ? 'active' : ''} ${mentionedTables.includes(t.name) ? 'mentioned' : ''}`}
-                  key={t.name}
-                  onClick={() => onSelectTable(t.name)}
-                  onDoubleClick={() => onOpenTableTab(dbName, t)}
-                >
-                  <Table2 size={15} />
-                  <span>{t.name}</span>
-                  <em>{t.columns.length}</em>
-                </button>
-              ))}
+              {expandedDbs.has(dbName) && tables.map((t) => {
+                const key = tableKey(dbName, t.name);
+                const mentioned = mentionedTables.includes(t.name) || mentionedTables.includes(key);
+                return (
+                  <button
+                    className={`table-item ${key === selectedTable ? 'active' : ''} ${mentioned ? 'mentioned' : ''}`}
+                    key={key}
+                    onClick={() => onSelectTable(key)}
+                    onDoubleClick={() => onOpenTableTab(dbName, t)}
+                  >
+                    <Table2 size={15} />
+                    <span>{t.name}</span>
+                    <em>{t.columns.length}</em>
+                  </button>
+                );
+              })}
             </div>
           );
         })}

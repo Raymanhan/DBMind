@@ -9,9 +9,48 @@ import type {
 } from '../shared/types';
 import { addLimitIfSelect, localSqlFromPrompt, validateSql } from '../shared/sqlTools';
 
+const demoConnection: DbConnectionConfig = {
+  id: 'browser-demo',
+  name: '123',
+  driver: 'mysql',
+  host: 'localhost',
+  port: 3306,
+  database: 'yingyan',
+  user: 'root',
+  password: '',
+  charset: 'utf8mb4',
+  timezone: 'local',
+  connectTimeout: 10000,
+  readonly: true,
+  ssl: false
+};
+
+const demoSchemas: Record<string, TableSchema[]> = {
+  yingyan: [
+    { name: 'canvas_cards', type: 'table', columns: Array.from({ length: 15 }, (_, i) => ({ name: `field_${i + 1}`, type: 'varchar(255)', nullable: true, primary: false })) },
+    { name: 'card_likes', type: 'table', columns: Array.from({ length: 8 }, (_, i) => ({ name: `field_${i + 1}`, type: 'varchar(255)', nullable: true, primary: false })) },
+    { name: 'sys_user', type: 'table', columns: [
+      { name: 'id', type: 'bigint', nullable: false, primary: true },
+      { name: 'tenant_id', type: 'varchar(64)', nullable: false, primary: false },
+      { name: 'status', type: 'varchar(32)', nullable: false, primary: false },
+      { name: 'updated_at', type: 'datetime', nullable: false, primary: false }
+    ] }
+  ],
+  test: [
+    { name: 'sys_users', type: 'table', columns: Array.from({ length: 9 }, (_, i) => ({ name: `field_${i + 1}`, type: 'varchar(255)', nullable: true, primary: false })) }
+  ],
+  ym_rag: [
+    { name: 'checkpoint_blobs', type: 'table', columns: Array.from({ length: 7 }, (_, i) => ({ name: `field_${i + 1}`, type: 'varchar(255)', nullable: true, primary: false })) },
+    { name: 'checkpoint_milvus', type: 'table', columns: Array.from({ length: 1 }, (_, i) => ({ name: `field_${i + 1}`, type: 'varchar(255)', nullable: true, primary: false })) },
+    { name: 'checkpoint_wiki', type: 'table', columns: Array.from({ length: 10 }, (_, i) => ({ name: `field_${i + 1}`, type: 'varchar(255)', nullable: true, primary: false })) },
+    { name: 'checkpoints', type: 'table', columns: Array.from({ length: 8 }, (_, i) => ({ name: `field_${i + 1}`, type: 'varchar(255)', nullable: true, primary: false })) },
+    { name: 'conversation', type: 'table', columns: Array.from({ length: 9 }, (_, i) => ({ name: `field_${i + 1}`, type: 'varchar(255)', nullable: true, primary: false })) }
+  ]
+};
+
 let settings: AppSettings = {
-  theme: 'dark',
-  selectedDatabasesByConnection: {},
+  theme: 'light',
+  selectedDatabasesByConnection: { [demoConnection.id]: ['yingyan', 'test', 'ym_rag'] },
   defaultAiProviderId: 'openai-compatible-default',
   aiProviders: [
     {
@@ -38,28 +77,38 @@ function browserOnlyError(): Error {
 
 export const browserFallbackApi: DbmindApi = {
   async getConnections() {
-    return [];
+    return [demoConnection];
   },
   async saveConnection(_config: DbConnectionConfig) {
     throw browserOnlyError();
   },
   async deleteConnection() {
-    return [];
+    return [demoConnection];
   },
   async testConnection() {
     throw browserOnlyError();
   },
   async listDatabases() {
-    throw browserOnlyError();
+    return Object.keys(demoSchemas).map((name) => ({ name, system: false }));
   },
   async getSchema(_connectionId: string, _database?: string): Promise<TableSchema[]> {
-    return [];
+    const databaseName = _database ?? demoConnection.database ?? 'yingyan';
+    return demoSchemas[databaseName] ?? [];
   },
   async getTableDdl() {
     throw browserOnlyError();
   },
   async runQuery(_connectionId: string, _sql: string, _database?: string): Promise<QueryResult> {
-    throw browserOnlyError();
+    return {
+      columns: ['count', 'tenant_id', 'updated_at'],
+      rows: Array.from({ length: 10 }, (_, index) => ({
+        count: [128, 96, 74, 63, 51, 47, 38, 29, 21, 15][index],
+        tenant_id: `tenant_${String(index + 1).padStart(3, '0')}`,
+        updated_at: '2024-05-23 16:48:21'
+      })),
+      rowCount: 10,
+      durationMs: 22
+    };
   },
   async updateCell() {
     throw browserOnlyError();

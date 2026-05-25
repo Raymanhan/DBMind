@@ -1,33 +1,35 @@
 .app-shell.theme-light {
-  --bg: #f6f7fb;
+  --bg: #f7f9fd;
   --bg2: #ffffff;
-  --bg3: #eef1f7;
-  --panel: #ffffff;
-  --border: rgba(32, 41, 57, 0.12);
-  --border-strong: rgba(32, 41, 57, 0.22);
-  --text: #172033;
-  --muted: #5d667a;
-  --dim: #8a93a5;
-  --accent: #4f46e5;
-  --accent2: #0f9f8f;
+  --bg3: #eef3fb;
+  --panel: rgba(255, 255, 255, 0.82);
+  --panel-solid: #ffffff;
+  --border: rgba(30, 42, 68, 0.10);
+  --border-strong: rgba(37, 51, 82, 0.18);
+  --text: #111936;
+  --muted: #56627a;
+  --dim: #8a94aa;
+  --accent: #4f46ff;
+  --accent2: #0aa390;
   --amber: #b7791f;
   --danger: #d63f5c;
+  --shadow-soft: 0 20px 60px rgba(30, 42, 68, 0.11);
   background:
-    linear-gradient(145deg, rgba(79, 70, 229, 0.08), transparent 28%),
-    linear-gradient(35deg, rgba(15, 159, 143, 0.08), transparent 28%),
+    radial-gradient(circle at 28% -10%, rgba(79, 70, 255, 0.14), transparent 32%),
+    radial-gradient(circle at 80% 0%, rgba(10, 163, 144, 0.10), transparent 28%),
     var(--bg);
 }
 
 .theme-light .rail,
 .theme-light .sidebar,
 .theme-light .ai-panel {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.84);
 }
 
 .theme-light .topbar,
 .theme-light .editor-toolbar,
 .theme-light .tabs {
-  background: #ffffff;
+  background: transparent;
 }
 
 .theme-light .work-tab-strip {
@@ -43,6 +45,23 @@
   border-bottom-color: #ffffff;
 }
 
+.theme-light .editor-zone,
+.theme-light .result-zone,
+.theme-light .work-tab-strip,
+.theme-light .sql-monaco-editor,
+.theme-light .table-wrap {
+  background: #ffffff;
+}
+
+.theme-light .editor-context-pill,
+.theme-light .db-selector-head,
+.theme-light .searchbox,
+.theme-light .connection-item,
+.theme-light .topbar-meta span,
+.theme-light .section-count {
+  background: #f8faff;
+}
+
 .theme-light .settings-page {
   background: rgba(246, 247, 251, 0.88);
 }
@@ -50,21 +69,10 @@
 .theme-light input,
 .theme-light select,
 .theme-light textarea,
-.theme-light .sql-editor-backdrop {
+.theme-light .sql-monaco-editor {
   background: #ffffff;
 }
 
-.theme-light .sql-editor-textarea {
-  caret-color: #22304a;
-  -webkit-text-fill-color: transparent;
-  background: transparent;
-}
-
-.theme-light .sql-editor-textarea::selection {
-  background: rgba(79, 70, 229, 0.18);
-}
-
-.theme-light .sql-editor-backdrop,
 .theme-light .chat-message pre,
 .theme-light .history-item pre {
   color: #22304a;
@@ -130,12 +138,20 @@
 
 .theme-light th {
   color: #4b5568;
-  background: #eef1f7;
+  background: #f2f5fb;
   box-shadow: inset 0 -1px 0 rgba(32, 41, 57, 0.14);
 }
 
 .theme-light td {
   color: #33405a;
+}
+
+.theme-light tbody tr:nth-child(even) td {
+  background: #fbfcff;
+}
+
+.theme-light tbody tr:hover td {
+  background: rgba(79, 70, 255, 0.055);
 }
 
 .theme-light .modal-overlay {

@@ -1,6 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { AppSettings, DatabaseInfo, DbmindApi, TableSchema } from '../../shared/types';
 
+function parseTableKey(key: string): { db?: string; table: string } {
+  const dot = key.indexOf('.');
+  if (dot <= 0) return { table: key };
+  return { db: key.slice(0, dot), table: key.slice(dot + 1) };
+}
+
 export function useSchema({
   api, activeConnection, activeConnectionId, settings, setSettings, settingsLoaded, setNotice
 }: {
@@ -91,11 +97,18 @@ export function useSchema({
   }, [activeConnectionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const allTables = useMemo(() => Object.values(schemaMap).flat(), [schemaMap]);
-  const selectedSchema = allTables.find((t) => t.name === selectedTable);
+  const selectedSchema = useMemo(() => {
+    if (!selectedTable) return undefined;
+    const { db, table } = parseTableKey(selectedTable);
+    if (db) return schemaMap[db]?.find((t) => t.name === table);
+    return allTables.find((t) => t.name === table);
+  }, [allTables, schemaMap, selectedTable]);
   const selectedSchemaDb = useMemo(() => {
     if (!selectedTable) return undefined;
-    for (const [db, tables] of Object.entries(schemaMap)) {
-      if (tables.some((t) => t.name === selectedTable)) return db;
+    const { db, table } = parseTableKey(selectedTable);
+    if (db) return db;
+    for (const [dbName, tables] of Object.entries(schemaMap)) {
+      if (tables.some((t) => t.name === table)) return dbName;
     }
     return undefined;
   }, [selectedTable, schemaMap]);

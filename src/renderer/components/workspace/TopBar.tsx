@@ -1,4 +1,4 @@
-import { Edit3, Play, Wand2 } from 'lucide-react';
+import { Bot, Database, Edit3, Layers3, Play, Server, Table2, Wand2 } from 'lucide-react';
 import type { AiProviderConfig, DbConnectionConfig, WorkTab } from '../../../shared/types';
 
 export function TopBar({
@@ -30,9 +30,20 @@ export function TopBar({
 }) {
   return (
     <header className="topbar">
-      <div>
+      <div className="topbar-copy">
         <h1>{workTab?.title || connection?.name || '未选择连接'}</h1>
-        <p>{connection ? `${connection.driver === 'postgres' ? 'PostgreSQL' : 'MySQL'}` : 'MySQL'} · {selectedDbsCount} 个数据库 · {tableCount} 个对象 · {dbName && tableName ? `${dbName}.${tableName}` : defaultProvider ? `${defaultProvider.name || defaultProvider.provider} · ${defaultProvider.apiMode}` : 'Local AI'}</p>
+        <div className="topbar-meta">
+          <span><Server size={13} />{connection ? (connection.driver === 'postgres' ? 'PostgreSQL' : 'MySQL') : 'MySQL'}</span>
+          <span><Database size={13} />{selectedDbsCount} 数据库</span>
+          <span><Layers3 size={13} />{tableCount} 对象</span>
+          {dbName && tableName ? (
+            <span><Table2 size={13} />{dbName}.{tableName}</span>
+          ) : defaultProvider ? (
+            <span><Bot size={13} />{defaultProvider.name || defaultProvider.provider} · {defaultProvider.apiMode}</span>
+          ) : (
+            <span><Bot size={13} />Local AI</span>
+          )}
+        </div>
       </div>
       <div className="topbar-actions">
         {workTab?.kind === 'table' && dbName && tableName && (

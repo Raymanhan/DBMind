@@ -9,7 +9,7 @@ export function useSettings({
   setNotice: (msg: string) => void;
   setLoadingFlag: (k: 'settings', v: boolean) => void;
 }) {
-  const [settings, setSettings] = useState<AppSettings>({ aiProviders: [], defaultAiProviderId: undefined, theme: 'dark', selectedDatabasesByConnection: {} });
+  const [settings, setSettings] = useState<AppSettings>({ aiProviders: [], defaultAiProviderId: undefined, theme: 'light', selectedDatabasesByConnection: {} });
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [aiDraft, setAiDraft] = useState<AiProviderConfig>(emptyAiProvider);
 

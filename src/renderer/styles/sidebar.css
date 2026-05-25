@@ -5,8 +5,8 @@
   overflow: hidden;
   position: relative;
   border-right: 1px solid var(--border);
-  background: rgba(17, 17, 24, 0.88);
-  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.055);
+  backdrop-filter: blur(24px);
 }
 .sidebar > .resize-handle-col {
   position: absolute;
@@ -27,7 +27,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px;
+  overflow-x: hidden;
+  padding: 14px 12px 16px;
 }
 
 
@@ -67,6 +68,24 @@
   font-size: 15px;
   font-weight: 650;
 }
+.panel-title {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.panel-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-title span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent2);
+  font-size: 11px;
+  font-weight: 650;
+}
 
 .connection-list {
   flex-shrink: 0;
@@ -96,24 +115,52 @@
   gap: 8px;
   width: 100%;
   min-height: 36px;
-  padding: 8px 10px;
+  padding: 7px 8px;
   color: var(--muted);
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 7px;
 }
+.connection-item {
+  min-height: 56px;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.055);
+  border-color: var(--border);
+  box-shadow: 0 10px 30px rgba(3, 8, 23, 0.08);
+}
 .connection-main {
   display: grid;
-  grid-template-columns: 18px 1fr auto;
+  grid-template-columns: 28px 1fr;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   min-width: 0;
   padding: 0;
   color: inherit;
   text-align: left;
   background: transparent;
   border: 0;
+}
+.connection-main em {
+  grid-column: 2;
+  display: inline-flex;
+  width: fit-content;
+  margin-top: -4px;
+  color: var(--accent2);
+  font-size: 11px;
+  font-weight: 650;
+}
+.connection-icon {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--accent);
+  background: rgba(91, 77, 255, 0.12);
+  border: 1px solid rgba(91, 77, 255, 0.20);
+  border-radius: 8px;
 }
 .row-actions {
   display: flex;
@@ -137,8 +184,8 @@
 .table-item { grid-template-columns: 18px 1fr auto; }
 .connection-item.active, .table-item.active {
   color: var(--text);
-  background: rgba(139, 124, 255, 0.13);
-  border-color: rgba(139, 124, 255, 0.24);
+  background: rgba(91, 77, 255, 0.12);
+  border-color: rgba(91, 77, 255, 0.26);
 }
 .table-item.mentioned { box-shadow: inset 3px 0 0 var(--accent2); }
 
@@ -194,9 +241,10 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
 }
 
 .section-label {
-  margin: 4px 0 10px;
+  margin: 5px 0 10px;
   color: var(--dim);
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 750;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -205,6 +253,20 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+.section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .database-select {
@@ -219,13 +281,13 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   align-items: center;
   gap: 8px;
   width: 100%;
-  height: 34px;
+  height: 36px;
   padding: 0 10px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 550;
   text-align: left;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
   border-radius: 7px;
 }
@@ -250,11 +312,11 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   max-width: 100%;
   padding: 3px 7px;
   overflow: hidden;
-  color: var(--muted);
+  color: var(--accent);
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: rgba(139, 124, 255, 0.10);
-  border: 1px solid rgba(139, 124, 255, 0.18);
+  background: rgba(91, 77, 255, 0.10);
+  border: 1px solid rgba(91, 77, 255, 0.18);
   border-radius: 6px;
   font-size: 11px;
   font-style: normal;
@@ -262,7 +324,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
 .db-multi-dropdown {
   margin: 8px 0;
   padding: 8px;
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border);
   border-radius: 8px;
 }
@@ -346,10 +408,12 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   background: rgba(255, 255, 255, 0.06);
 }
 .tree-group .table-item {
-  padding-left: 44px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  min-height: 31px;
+  margin-left: 14px;
+  padding-left: 20px;
   border-left: 1px solid var(--border);
-  border-radius: 0;
-  min-height: 30px;
+  border-radius: 0 7px 7px 0;
 }
 .tree-group .table-item.active {
   border-left-color: rgba(139, 124, 255, 0.4);
@@ -359,11 +423,11 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 34px;
-  margin-bottom: 8px;
+  height: 36px;
+  margin: 10px 0;
   padding: 0 10px;
   color: var(--dim);
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.055);
   border: 1px solid var(--border);
   border-radius: 7px;
   font-size: 12px;
@@ -376,6 +440,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
 }
 
 .tree-group {
+  min-width: 0;
   margin-bottom: 4px;
 }
 .tree-group-head {
@@ -383,7 +448,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   align-items: center;
   gap: 8px;
   width: 100%;
-  height: 32px;
+  height: 34px;
   padding: 0 10px;
   color: var(--muted);
   font-size: 12px;
@@ -391,7 +456,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 7px;
 }
 .tree-group-head:hover {
   color: var(--text);

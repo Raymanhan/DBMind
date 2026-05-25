@@ -12,13 +12,44 @@ import { mysqlTableRef, quoteMysqlIdentifier } from '../../src/shared/sql/identi
 import { assertWritableMysql, mysqlConnectionOptions } from './dbCommon.js';
 
 type Row = Record<string, string | number | null>;
+const MYSQL_TYPE_PATTERN = /^[a-zA-Z][a-zA-Z0-9_]*(?:\s*\([0-9,\s]+\))?(?:\s+(?:unsigned|signed|zerofill))*$/i;
+const MYSQL_NAME_PATTERN = /^[a-zA-Z0-9_$]+$/;
+const MYSQL_OPTION_PATTERN = /^[a-zA-Z0-9_]+$/;
+const FK_ACTIONS = new Set(['', 'RESTRICT', 'CASCADE', 'SET NULL', 'NO ACTION']);
 
 function sqlString(value?: string | null): string {
   if (value === undefined || value === null || value === '') return '';
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+function assertMysqlIdentifier(value: string, label: string): void {
+  if (!value.trim()) throw new Error(`${label}不能为空。`);
+  if (!MYSQL_NAME_PATTERN.test(value)) {
+    throw new Error(`${label}只能包含字母、数字、下划线、$。`);
+  }
+}
+
+function assertMysqlOption(value: string, label: string): void {
+  if (!value.trim()) return;
+  if (!MYSQL_OPTION_PATTERN.test(value)) {
+    throw new Error(`${label}格式不合法。`);
+  }
+}
+
+function assertColumnType(value: string): void {
+  if (!MYSQL_TYPE_PATTERN.test(value.trim())) {
+    throw new Error(`字段类型不合法：${value}`);
+  }
+}
+
+function assertForeignKeyAction(value: string | undefined, label: string): void {
+  const normalized = value ?? '';
+  if (!FK_ACTIONS.has(normalized)) throw new Error(`${label}不合法：${normalized}`);
+}
+
 function columnDefinition(column: TableDesignColumn): string {
+  assertMysqlIdentifier(column.name, '字段名');
+  assertColumnType(column.type || 'varchar(255)');
   const parts = [
     quoteMysqlIdentifier(column.name),
     column.type || 'varchar(255)',
@@ -42,12 +73,22 @@ function sameColumn(a: TableDesignColumn, b: TableDesignColumn): boolean {
 }
 
 function indexSql(index: TableDesignIndex): string {
+  assertMysqlIdentifier(index.name, '索引名');
+  if (!index.columns.length) throw new Error(`索引 ${index.name} 缺少字段。`);
+  index.columns.forEach((column) => assertMysqlIdentifier(column, `索引 ${index.name} 的字段名`));
   const unique = index.unique ? 'UNIQUE ' : '';
   const columns = index.columns.map(quoteMysqlIdentifier).join(', ');
   return `ADD ${unique}INDEX ${quoteMysqlIdentifier(index.name)} (${columns})`;
 }
 
 function foreignKeySql(fk: TableDesignForeignKey): string {
+  assertMysqlIdentifier(fk.name, '外键名');
+  if (!fk.columns.length || !fk.referencedColumns.length) throw new Error(`外键 ${fk.name} 缺少字段。`);
+  assertMysqlIdentifier(fk.referencedTable, `外键 ${fk.name} 的引用表`);
+  fk.columns.forEach((column) => assertMysqlIdentifier(column, `外键 ${fk.name} 的本表字段`));
+  fk.referencedColumns.forEach((column) => assertMysqlIdentifier(column, `外键 ${fk.name} 的引用字段`));
+  assertForeignKeyAction(fk.onUpdate, 'ON UPDATE');
+  assertForeignKeyAction(fk.onDelete, 'ON DELETE');
   const columns = fk.columns.map(quoteMysqlIdentifier).join(', ');
   const refColumns = fk.referencedColumns.map(quoteMysqlIdentifier).join(', ');
   const onUpdate = fk.onUpdate ? ` ON UPDATE ${fk.onUpdate}` : '';
@@ -139,6 +180,13 @@ export async function getTableDesign(config: DbConnectionConfig, database: strin
 
 export function previewTableDesign(change: TableDesignChange): string {
   const { original, draft } = change;
+  assertMysqlIdentifier(original.database, '数据库名');
+  assertMysqlIdentifier(original.table, '表名');
+  if (draft.table !== original.table || draft.database !== original.database) {
+    throw new Error('暂不支持在表设计器中修改数据库名或表名。');
+  }
+  assertMysqlOption(draft.engine ?? '', 'Engine');
+  assertMysqlOption(draft.collation ?? '', 'Collation');
   const tableRef = mysqlTableRef(original.table, original.database);
   const clauses: string[] = [];
 
@@ -192,11 +240,15 @@ export function previewTableDesign(change: TableDesignChange): string {
 
 export async function applyTableDesign(config: DbConnectionConfig, change: TableDesignChange, sql: string): Promise<TableDesignApplyResponse> {
   assertWritableMysql(config);
-  if (!sql.trim()) return { ok: true, sql, message: '没有需要执行的结构变更。' };
+  const generatedSql = previewTableDesign(change);
+  if (sql.trim() && sql.trim() !== generatedSql.trim()) {
+    throw new Error('表结构 SQL 已过期或被修改，请重新生成 ALTER 后再执行。');
+  }
+  if (!generatedSql.trim()) return { ok: true, sql: generatedSql, message: '没有需要执行的结构变更。' };
   const connection = await mysql.createConnection(mysqlConnectionOptions({ ...config, database: change.original.database }));
   try {
-    await connection.query(sql);
-    return { ok: true, sql };
+    await connection.query(generatedSql);
+    return { ok: true, sql: generatedSql };
   } finally {
     await connection.end();
   }

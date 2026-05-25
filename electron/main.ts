@@ -277,8 +277,8 @@ app.whenReady().then(() => {
     const config = await getConnection(connectionId);
     return getSchema(database ? { ...config, database } : config);
   });
-  ipcMain.handle('db:table-ddl', async (_event, connectionId: string, tableName: string) =>
-    getTableDdl(await getConnection(connectionId), tableName)
+  ipcMain.handle('db:table-ddl', async (_event, connectionId: string, tableName: string, database?: string) =>
+    getTableDdl(database ? { ...(await getConnection(connectionId)), database } : await getConnection(connectionId), tableName)
   );
 
   // ── Query ──
@@ -328,10 +328,10 @@ app.whenReady().then(() => {
     const config = await getConnection(request.connectionId);
     const started = performance.now();
     const response = await applyTableDesign(config, request.change, request.sql);
-    if (response.ok && request.sql.trim()) {
+    if (response.ok && response.sql.trim()) {
       await appendQueryHistory(
         { ...config, database: request.change.original.database },
-        request.sql,
+        response.sql,
         { columns: [], rows: [], rowCount: 0, durationMs: Math.round(performance.now() - started) },
         'schema-edit'
       );
@@ -356,13 +356,19 @@ app.whenReady().then(() => {
   // ── AI ──
   ipcMain.handle('ai:test-provider', async (_event, config: AiProviderConfig) => testAiProvider(config));
   ipcMain.handle('ai:generate-sql', async (_event, input: AiGenerateRequest) => generateSql(input));
-  ipcMain.on('ai:generate-sql-stream', async (event, input: AiGenerateRequest) => {
+  ipcMain.on('ai:generate-sql-stream', async (event, payload: AiGenerateRequest | { requestId?: string; input: AiGenerateRequest }) => {
+    const requestId = 'input' in payload ? payload.requestId : undefined;
+    const input = 'input' in payload ? payload.input : payload;
+    const replyChannel = requestId ? `ai:stream-chunk:${requestId}` : 'ai:stream-chunk';
+    const sendChunk = (chunk: import('../src/shared/types.js').AiStreamChunk) => {
+      event.sender.send(replyChannel, chunk);
+    };
     try {
       const settings = await readSettings();
       const provider = settings.aiProviders.find((item) => item.id === settings.defaultAiProviderId) ?? settings.aiProviders[0];
       if (!provider || !provider.streaming) {
         const result = await generateSql(input);
-        event.sender.send('ai:stream-chunk', { done: true, sql: result.sql, explanation: result.explanation, source: result.source, usedTables: result.usedTables, warnings: result.warnings });
+        sendChunk({ done: true, sql: result.sql, explanation: result.explanation, source: result.source, usedTables: result.usedTables, warnings: result.warnings });
         return;
       }
 
@@ -371,12 +377,12 @@ app.whenReady().then(() => {
         try {
           const err = JSON.parse(chunk) as { error?: string };
           if (err.error) {
-            event.sender.send('ai:stream-chunk', { error: err.error });
+            sendChunk({ error: err.error });
             return;
           }
         } catch {}
         fullText += chunk;
-        event.sender.send('ai:stream-chunk', { token: chunk });
+        sendChunk({ token: chunk });
       }
 
       const parsed = extractJsonObject(fullText);
@@ -389,13 +395,13 @@ app.whenReady().then(() => {
         source = provider.provider === 'openai' ? 'openai' : 'openai-compatible';
       }
       sql = addLimitIfSelect(sql);
-      event.sender.send('ai:stream-chunk', {
+      sendChunk({
         done: true, sql, explanation, source,
         usedTables: input.tables.map((t) => t.name),
         warnings: validateSql(sql)
       });
     } catch (error) {
-      event.sender.send('ai:stream-chunk', { error: error instanceof Error ? error.message : 'AI 生成失败' });
+      sendChunk({ error: error instanceof Error ? error.message : 'AI 生成失败' });
     }
   });
 

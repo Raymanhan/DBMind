@@ -256,7 +256,7 @@ export interface DbmindApi {
   testConnection(config: DbConnectionConfig): Promise<{ ok: boolean; message: string }>;
   listDatabases(config: DbConnectionConfig): Promise<DatabaseInfo[]>;
   getSchema(connectionId: string, database?: string): Promise<TableSchema[]>;
-  getTableDdl(connectionId: string, tableName: string): Promise<string>;
+  getTableDdl(connectionId: string, tableName: string, database?: string): Promise<string>;
   runQuery(connectionId: string, sql: string, database?: string): Promise<QueryResult>;
   updateCell(request: UpdateCellRequest): Promise<UpdateCellResponse>;
   updateCellsBatch(request: BatchUpdateCellRequest): Promise<BatchUpdateCellResponse>;

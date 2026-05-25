@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
-import {Database, Edit3, Plus, Save, Trash2} from 'lucide-react';
+import {Braces, Clock3, Copy, Database, Download, Edit3, FileSpreadsheet, Plus, Rows3, Save, Sparkles, Trash2} from 'lucide-react';
 import type {AiConversation, AiProviderConfig, ChatMessage, DbConnectionConfig, DbmindApi, WorkTab} from '../shared/types';
 import {AiPanel} from './components/ai/AiPanel';
 import {ConnectionModal} from './components/connection/ConnectionModal';
@@ -126,7 +126,8 @@ export function App() {
     const {
         connections, setConnections, activeConnectionId, setActiveConnectionId,
         connectionDraft, setConnectionDraft, showConnectionModal, setShowConnectionModal,
-        databases, setDatabases, saveConnection, deleteConnection, editConnection, testConnection, startNewConnection
+        databases: connectionDatabases,
+        saveConnection, deleteConnection, editConnection, testConnection, startNewConnection
     } = useConnections({
         api,
         emptyConnection,
@@ -144,13 +145,10 @@ export function App() {
 
     const {
         schemaMap, selectedDbs, setSelectedDbs, expandedDbs, searchQuery, dbFilter, selectedTable,
-        databases: _dbs, showDbSelector, setSearchQuery, setDbFilter, setSelectedTable, setShowDbSelector,
+        databases: schemaDatabases, showDbSelector, setSearchQuery, setDbFilter, setSelectedTable, setShowDbSelector,
         toggleDb, toggleExpandDb, refreshDbSchema, refreshAllSchemas,
         allTables, selectedSchema, selectedSchemaDb, dbTreeFiltered, filteredDatabases, saveSelectedDbs
     } = useSchema({api, activeConnection, activeConnectionId, settings, setSettings, settingsLoaded, setNotice});
-
-    if (databases.length === 0 && _dbs.length > 0) { /* migrate - databases now from useConnections */
-    }
 
     const {
         workTabs, setWorkTabs, activeWorkTabId, setActiveWorkTabId, queryHistory,
@@ -168,6 +166,7 @@ export function App() {
     const activeSql = activeWorkTab?.sql ?? seedSql;
     const activeResult = activeWorkTab?.result ?? null;
     const activeResultTab = activeWorkTab?.resultTab ?? 'results';
+    const availableDatabaseNames = useMemo(() => schemaDatabases.map((db) => db.name), [schemaDatabases]);
     const defaultProvider = settings.aiProviders.find((p) => p.id === settings.defaultAiProviderId) ?? settings.aiProviders[0];
     const activeTableSchema = useMemo(() => {
         if (!activeWorkTab?.dbName || !activeWorkTab.tableName) return undefined;
@@ -318,6 +317,19 @@ export function App() {
         setNotice(`已导出 ${filename}`);
     }
 
+    async function copyText(value: unknown, label = '内容') {
+        const text = value === null || value === undefined ? '' : String(value);
+        try {
+            await navigator.clipboard.writeText(text);
+            setNotice(`已复制${label}`);
+        } catch {
+            setNotice('复制失败');
+        }
+    }
+
+    const visibleRows = activeResult?.rows.slice(0, 1000) ?? [];
+    const isResultTruncated = Boolean(activeResult && activeResult.rows.length > visibleRows.length);
+
     return (
         <div className={`app-shell theme-${settings.theme ?? 'dark'}`}
              style={{gridTemplateColumns: `72px ${sidebarWidth}px ${aiCollapsed ? 'minmax(720px, 1fr)' : 'minmax(640px, 1fr)'} ${aiCollapsed ? 56 : aiPanelWidth}px`}}>
@@ -351,7 +363,7 @@ export function App() {
                         activeConnection={activeConnection}
                         activeConnectionId={activeConnectionId}
                         connections={connections}
-                        databases={databases}
+                        databases={schemaDatabases}
                         filteredDatabases={filteredDatabases}
                         selectedDbs={selectedDbs}
                         expandedDbs={expandedDbs}
@@ -415,8 +427,14 @@ export function App() {
                         <section className="editor-zone"
                                  style={editorHeightPx ? {flex: `0 0 ${editorHeightPx}px`} : {flex: '1 1 50%'}}>
                             <div className="editor-toolbar">
-                                <span>{activeWorkTab?.kind === 'table' && activeWorkTab.dbName ? `${activeWorkTab.dbName}.${activeWorkTab.tableName}` : 'SQL Console'}</span>
-                                <span>{notice || 'Ready'}</span>
+                                <div className="editor-context-pill">
+                                    <Database size={14}/>
+                                    <span>{activeWorkTab?.kind === 'table' && activeWorkTab.dbName ? `${activeWorkTab.dbName}.${activeWorkTab.tableName}` : activeConnection?.name ?? 'SQL Console'}</span>
+                                </div>
+                                <div className="editor-toolbar-actions">
+                                    <span className="toolbar-status">{notice || 'Ready'}</span>
+                                    <span className="toolbar-toggle"><Sparkles size={14}/> 智能补全</span>
+                                </div>
                             </div>
                             <SqlEditor
                                 value={activeSql}
@@ -427,6 +445,7 @@ export function App() {
                                 })}
                                 schemaMap={schemaMap}
                                 selectedDbs={selectedDbs}
+                                databaseNames={availableDatabaseNames}
                                 currentDb={activeWorkTab?.dbName ?? (selectedDbs.length === 1 ? selectedDbs[0] : undefined)}
                             />
                         </section>
@@ -436,14 +455,16 @@ export function App() {
                         <section className="result-zone" style={{flex: '1 1 50%', minHeight: 0}}>
                             <div className="tabs">
                                 <button className={activeResultTab === 'results' ? 'active' : ''}
-                                        onClick={() => updateActiveWorkTab({resultTab: 'results'})}>结果集
+                                        onClick={() => updateActiveWorkTab({resultTab: 'results'})}><Rows3 size={14}/> 结果集
                                 </button>
                                 <button className={activeResultTab === 'history' ? 'active' : ''}
-                                        onClick={() => updateActiveWorkTab({resultTab: 'history'})}>查询历史
+                                        onClick={() => updateActiveWorkTab({resultTab: 'history'})}><Clock3 size={14}/> 查询历史
                                 </button>
-                                <button onClick={() => exportResult('csv')}>CSV</button>
-                                <button onClick={() => exportResult('json')}>JSON</button>
+                                <button onClick={() => exportResult('csv')}><FileSpreadsheet size={14}/> CSV</button>
+                                <button onClick={() => exportResult('json')}><Braces size={14}/> JSON</button>
                                 <span>{activeResult ? `${activeResult.rowCount} rows · ${activeResult.durationMs}ms` : '尚未执行'}</span>
+                                {isResultTruncated && <span className="result-note">仅渲染前 {visibleRows.length} 行</span>}
+                                <button className="tabs-icon" onClick={() => exportResult('csv')} title="下载 CSV"><Download size={14}/></button>
                             </div>
                             {pendingEdits.length > 0 && activeResultTab === 'results' && (
                                 <div className="batch-edit-toolbar">
@@ -499,6 +520,7 @@ export function App() {
                                     <table>
                                         <thead>
                                         <tr>
+                                            <th className="row-index-head">#</th>
                                             {activeResult.columns.map((column) => (
                                                 <th key={column}>
                                                     <button
@@ -512,8 +534,9 @@ export function App() {
                                         </tr>
                                         </thead>
                                         <tbody>
-                                        {activeResult.rows.map((row, index) => (
+                                        {visibleRows.map((row, index) => (
                                             <tr key={index}>
+                                                <td className="row-index-cell">{index + 1}</td>
                                                 {activeResult.columns.map((column) => {
                                                     const reason = getCellEditBlockReason(row, column);
                                                     const isInlineEditing = activeInlineEditor?.rowIndex === index && activeInlineEditor.column === column;
@@ -572,8 +595,21 @@ export function App() {
                                                                     </button>
                                                                 </div>
                                                             ) : (
-                                                                <span
-                                                                    className={isNullDisplay ? 'cell-edited-null' : ''}>{displayValue}</span>
+                                                                <div className="cell-value-wrap">
+                                                                    <span
+                                                                        className={isNullDisplay ? 'cell-edited-null' : ''}>{displayValue}</span>
+                                                                    <button
+                                                                        className="cell-copy-btn"
+                                                                        type="button"
+                                                                        onClick={(event) => {
+                                                                            event.stopPropagation();
+                                                                            copyText(row[column], '单元格');
+                                                                        }}
+                                                                        title="复制单元格"
+                                                                    >
+                                                                        <Copy size={11}/>
+                                                                    </button>
+                                                                </div>
                                                             )}
                                                         </td>
                                                     );
@@ -644,7 +680,7 @@ export function App() {
             <ConnectionModal
                 open={showConnectionModal}
                 connectionDraft={connectionDraft}
-                databases={databases}
+                databases={connectionDatabases}
                 loading={loading.connection}
                 onClose={() => setShowConnectionModal(false)}
                 onChange={setConnectionDraft}
@@ -677,4 +713,3 @@ export function App() {
         </div>
     );
 }
-

@@ -330,7 +330,7 @@ export function useAiAssistant({
   const loadTableDdl = useCallback(async () => {
     if (!selectedSchema) { setNotice('请先选择一张表。'); return; }
     try {
-      const ddl = await api.getTableDdl(activeConnectionId, selectedSchema.name);
+      const ddl = await api.getTableDdl(activeConnectionId, selectedSchema.name, selectedSchemaDb);
       const nextSql = ddl || `-- 未读取到 ${selectedSchema.name} 的 DDL`;
       updateActiveWorkTab({ baseSql: nextSql, sql: nextSql, sort: undefined });
       setNotice(`已读取 ${selectedSchema.name} 的建表 DDL`);

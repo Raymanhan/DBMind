@@ -8,7 +8,7 @@ const api: DbmindApi = {
   testConnection: (config: DbConnectionConfig) => ipcRenderer.invoke('connections:test', config),
   listDatabases: (config: DbConnectionConfig) => ipcRenderer.invoke('db:databases', config),
   getSchema: (connectionId: string, database?: string) => ipcRenderer.invoke('db:schema', connectionId, database),
-  getTableDdl: (connectionId: string, tableName: string) => ipcRenderer.invoke('db:table-ddl', connectionId, tableName),
+  getTableDdl: (connectionId: string, tableName: string, database?: string) => ipcRenderer.invoke('db:table-ddl', connectionId, tableName, database),
   runQuery: (connectionId: string, sql: string, database?: string) => ipcRenderer.invoke('db:query', connectionId, sql, database),
   updateCell: (request: UpdateCellRequest) => ipcRenderer.invoke('db:update-cell', request),
   updateCellsBatch: (request: BatchUpdateCellRequest) => ipcRenderer.invoke('db:update-cells-batch', request),
@@ -23,15 +23,17 @@ const api: DbmindApi = {
   generateSql: (input: AiGenerateRequest) => ipcRenderer.invoke('ai:generate-sql', input),
   generateSqlStream(input: AiGenerateRequest, onChunk: (chunk: AiStreamChunk) => void) {
     return new Promise<void>((resolve) => {
+      const requestId = crypto.randomUUID();
+      const channel = `ai:stream-chunk:${requestId}`;
       const handler = (_event: Electron.IpcRendererEvent, chunk: AiStreamChunk) => {
         onChunk(chunk);
         if (chunk.done || chunk.error) {
-          ipcRenderer.removeListener('ai:stream-chunk', handler);
+          ipcRenderer.removeListener(channel, handler);
           resolve();
         }
       };
-      ipcRenderer.on('ai:stream-chunk', handler);
-      ipcRenderer.send('ai:generate-sql-stream', input);
+      ipcRenderer.on(channel, handler);
+      ipcRenderer.send('ai:generate-sql-stream', { requestId, input });
     });
   },
   listAiConversations: () => ipcRenderer.invoke('ai:list-conversations'),

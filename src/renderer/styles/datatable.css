@@ -2,6 +2,7 @@
   position: relative;
   flex: 1;
   overflow: auto;
+  background: var(--panel-solid);
 }
 .loading-overlay {
   position: absolute;
@@ -22,18 +23,19 @@
 }
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 12px;
 }
 th, td {
   max-width: 260px;
-  padding: 10px 14px;
+  padding: 9px 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 th {
   position: sticky;
@@ -41,7 +43,29 @@ th {
   z-index: 2;
   color: var(--muted);
   text-align: left;
+  background: var(--bg3);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 750;
+}
+.row-index-head,
+.row-index-cell {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
+  color: var(--dim);
+  text-align: right;
   background: var(--bg2);
+  user-select: none;
+}
+.row-index-cell {
+  z-index: 1;
+  background: var(--bg);
+}
+.result-note {
+  color: var(--amber);
 }
 thead tr:first-child th {
   top: 0;
@@ -77,11 +101,17 @@ thead tr:first-child th {
   color: var(--accent);
 }
 td { color: #c9c9d8; }
+tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.018);
+}
+tbody tr:hover td {
+  background: rgba(91, 77, 255, 0.055);
+}
 td.cell-editable {
   cursor: cell;
 }
 td.cell-editable:hover {
-  background: rgba(57, 217, 138, 0.08);
+  background: rgba(15, 183, 165, 0.08);
 }
 td.cell-readonly {
   cursor: not-allowed;
@@ -91,6 +121,34 @@ td.cell-edited {
 }
 td.cell-edited:hover {
   background: rgba(45, 212, 191, 0.22);
+}
+.cell-value-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.cell-value-wrap > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cell-copy-btn {
+  display: none;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+td:hover .cell-copy-btn {
+  display: grid;
+}
+.cell-copy-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 .cell-edited-null {
   color: var(--muted);

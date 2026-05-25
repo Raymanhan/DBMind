@@ -1,191 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
 import type { TableSchema } from '../../../shared/types';
 
-/* ---------- SQL keywords ---------- */
-const KEYWORDS = new Set([
-  'SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'IN', 'IS', 'NULL', 'TRUE', 'FALSE',
-  'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE', 'CREATE', 'ALTER', 'DROP',
-  'TABLE', 'INDEX', 'VIEW', 'DATABASE', 'SCHEMA', 'COLUMN', 'ADD', 'MODIFY', 'CHANGE',
-  'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'FULL', 'ON', 'AS',
-  'GROUP', 'BY', 'ORDER', 'ASC', 'DESC', 'HAVING', 'LIMIT', 'OFFSET', 'UNION', 'ALL',
-  'DISTINCT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'IF', 'EXISTS', 'BETWEEN',
-  'LIKE', 'REGEXP', 'RLIKE', 'ANY', 'SOME', 'PRIMARY', 'KEY', 'FOREIGN',
-  'REFERENCES', 'CONSTRAINT', 'UNIQUE', 'CHECK', 'DEFAULT', 'AUTO_INCREMENT',
-  'CASCADE', 'RESTRICT', 'NO', 'ACTION', 'TRUNCATE', 'RENAME', 'REPLACE',
-  'USE', 'SHOW', 'DESCRIBE', 'EXPLAIN', 'ANALYZE', 'WITH', 'RECURSIVE',
-  'PARTITION', 'OVER', 'WINDOW', 'LATERAL', 'NATURAL', 'USING', 'FORCE',
-  'IGNORE', 'STRAIGHT_JOIN', 'SQL_CALC_FOUND_ROWS', 'SQL_NO_CACHE', 'SQL_BUFFER_RESULT',
-  'HIGH_PRIORITY', 'LOW_PRIORITY', 'DELAYED', 'QUICK', 'LOCK', 'UNLOCK',
-  'BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'START', 'TRANSACTION',
-  'TEMPORARY', 'IF', 'NOT', 'EXISTS', 'CHARACTER', 'COLLATE', 'ENGINE',
-  'COMMENT', 'AFTER', 'FIRST', 'BEFORE', 'EACH', 'ROW', 'TRIGGER',
-  'FUNCTION', 'PROCEDURE', 'EVENT', 'GRANT', 'REVOKE', 'PRIVILEGES',
-  'TO', 'IDENTIFIED', 'FLUSH', 'KILL', 'LOAD', 'DATA', 'INFILE',
-  'XOR', 'DIV', 'MOD', 'BINARY', 'ESCAPE', 'LIKE', 'SOUNDS',
-]);
+type CompletionKind = 'keyword' | 'database' | 'table' | 'column';
 
-const FUNCTIONS = new Set([
-  'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'GROUP_CONCAT', 'COALESCE', 'IFNULL',
-  'NULLIF', 'CAST', 'CONVERT', 'CONCAT', 'SUBSTRING', 'SUBSTR', 'LEFT', 'RIGHT',
-  'TRIM', 'LTRIM', 'RTRIM', 'UPPER', 'LOWER', 'LENGTH', 'CHAR_LENGTH',
-  'REPLACE', 'REVERSE', 'REPEAT', 'LPAD', 'RPAD', 'INSTR', 'LOCATE', 'POSITION',
-  'NOW', 'CURDATE', 'CURTIME', 'DATE', 'TIME', 'YEAR', 'MONTH', 'DAY',
-  'HOUR', 'MINUTE', 'SECOND', 'DAYOFWEEK', 'DAYOFMONTH', 'DAYOFYEAR',
-  'WEEK', 'QUARTER', 'DATE_FORMAT', 'TIME_FORMAT', 'STR_TO_DATE',
-  'DATE_ADD', 'DATE_SUB', 'DATEDIFF', 'TIMEDIFF', 'TIMESTAMPDIFF',
-  'UNIX_TIMESTAMP', 'FROM_UNIXTIME', 'EXTRACT', 'LAST_DAY', 'MAKEDATE',
-  'ABS', 'CEIL', 'CEILING', 'FLOOR', 'ROUND', 'TRUNCATE', 'RAND',
-  'POW', 'POWER', 'SQRT', 'EXP', 'LOG', 'LOG10', 'LOG2', 'SIGN',
-  'GREATEST', 'LEAST', 'BIT_COUNT', 'CRC32', 'MD5', 'SHA1', 'SHA2',
-  'UUID', 'UUID_SHORT', 'JSON_EXTRACT', 'JSON_OBJECT', 'JSON_ARRAY',
-  'JSON_SET', 'JSON_REMOVE', 'JSON_CONTAINS', 'JSON_KEYS', 'JSON_LENGTH',
-  'ROW_NUMBER', 'RANK', 'DENSE_RANK', 'NTILE', 'LAG', 'LEAD',
-  'FIRST_VALUE', 'LAST_VALUE', 'NTH_VALUE', 'CUME_DIST', 'PERCENT_RANK',
-  'IF', 'IFNULL', 'COALESCE', 'NULLIF', 'BIN', 'HEX', 'CONV',
-]);
-
-const TYPES = new Set([
-  'INT', 'INTEGER', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT',
-  'FLOAT', 'DOUBLE', 'DECIMAL', 'NUMERIC', 'REAL',
-  'CHAR', 'VARCHAR', 'TINYTEXT', 'TEXT', 'MEDIUMTEXT', 'LONGTEXT',
-  'BINARY', 'VARBINARY', 'TINYBLOB', 'BLOB', 'MEDIUMBLOB', 'LONGBLOB',
-  'DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR',
-  'ENUM', 'SET', 'JSON', 'GEOMETRY', 'POINT', 'LINESTRING', 'POLYGON',
-  'BOOLEAN', 'BOOL', 'BIT', 'SERIAL', 'SERIAL4', 'SERIAL8',
-  'UNSIGNED', 'SIGNED', 'ZEROFILL',
-]);
-
-/* ---------- Tokenizer ---------- */
-type TokenKind = 'keyword' | 'function' | 'type' | 'string' | 'number' | 'comment' | 'operator' | 'identifier' | 'backtick' | 'space' | 'paren' | 'other';
-
-interface Token {
-  kind: TokenKind;
-  value: string;
-  start: number;
-  end: number;
+interface Completion {
+  label: string;
+  kind: CompletionKind;
+  sub?: string;
 }
 
-function tokenize(sql: string): Token[] {
-  const tokens: Token[] = [];
-  let i = 0;
-
-  while (i < sql.length) {
-    // whitespace
-    if (/\s/.test(sql[i])) {
-      const start = i;
-      while (i < sql.length && /\s/.test(sql[i])) i++;
-      tokens.push({ kind: 'space', value: sql.slice(start, i), start, end: i });
-      continue;
-    }
-    // single-line comment --
-    if (sql[i] === '-' && sql[i + 1] === '-') {
-      const start = i;
-      while (i < sql.length && sql[i] !== '\n') i++;
-      tokens.push({ kind: 'comment', value: sql.slice(start, i), start, end: i });
-      continue;
-    }
-    // multi-line comment /* */
-    if (sql[i] === '/' && sql[i + 1] === '*') {
-      const start = i;
-      i += 2;
-      while (i < sql.length && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
-      if (i < sql.length) i += 2;
-      tokens.push({ kind: 'comment', value: sql.slice(start, i), start, end: i });
-      continue;
-    }
-    // string literals '...' or "..." (MySQL allows double-quoted strings in some modes)
-    if (sql[i] === "'" || sql[i] === '"') {
-      const quote = sql[i];
-      const start = i;
-      i++;
-      while (i < sql.length && sql[i] !== quote) {
-        if (sql[i] === '\\') i++; // skip escaped chars
-        i++;
-      }
-      if (i < sql.length) i++; // consume closing quote
-      tokens.push({ kind: 'string', value: sql.slice(start, i), start, end: i });
-      continue;
-    }
-    // backtick identifiers `...`
-    if (sql[i] === '`') {
-      const start = i;
-      i++;
-      while (i < sql.length && sql[i] !== '`') i++;
-      if (i < sql.length) i++;
-      tokens.push({ kind: 'backtick', value: sql.slice(start, i), start, end: i });
-      continue;
-    }
-    // numbers
-    if (/[0-9]/.test(sql[i]) || (sql[i] === '.' && /[0-9]/.test(sql[i + 1]))) {
-      const start = i;
-      while (i < sql.length && /[0-9.eExXa-fA-F]/.test(sql[i])) i++;
-      tokens.push({ kind: 'number', value: sql.slice(start, i), start, end: i });
-      continue;
-    }
-    // operators and punctuation
-    if (/[<>!=+\-*\/%&|^~.,;:()[\]]/.test(sql[i])) {
-      const start = i;
-      const ch = sql[i];
-      i++;
-      // multi-char operators
-      if ((ch === '<' || ch === '>' || ch === '!' || ch === '=') && sql[i] === '=') i++;
-      else if (ch === '<' && sql[i] === '>') i++;
-      else if (ch === '|' && sql[i] === '|') i++;
-      else if (ch === '&' && sql[i] === '&') i++;
-      tokens.push({ kind: 'paren', value: sql.slice(start, i), start, end: i });
-      continue;
-    }
-    // identifiers / keywords
-    {
-      const start = i;
-      while (i < sql.length && /[a-zA-Z0-9_$]/.test(sql[i])) i++;
-      const word = sql.slice(start, i);
-      const upper = word.toUpperCase();
-      if (KEYWORDS.has(upper)) {
-        tokens.push({ kind: 'keyword', value: word, start, end: i });
-      } else if (FUNCTIONS.has(upper) && (i >= sql.length || sql[i] === '(' || /\s/.test(sql[i]))) {
-        tokens.push({ kind: 'function', value: word, start, end: i });
-      } else if (TYPES.has(upper)) {
-        tokens.push({ kind: 'type', value: word, start, end: i });
-      } else if (upper === 'NULL' || upper === 'TRUE' || upper === 'FALSE') {
-        tokens.push({ kind: 'keyword', value: word, start, end: i });
-      } else {
-        tokens.push({ kind: 'identifier', value: word, start, end: i });
-      }
-      continue;
-    }
-  }
-
-  return tokens;
-}
-
-/* ---------- HTML highlighter ---------- */
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function tokensToHtml(tokens: Token[]): string {
-  return tokens
-    .map((token) => {
-      const escaped = escapeHtml(token.value);
-      switch (token.kind) {
-        case 'keyword': return `<span class="sql-kw">${escaped}</span>`;
-        case 'function': return `<span class="sql-fn">${escaped}</span>`;
-        case 'type': return `<span class="sql-type">${escaped}</span>`;
-        case 'string': return `<span class="sql-str">${escaped}</span>`;
-        case 'number': return `<span class="sql-num">${escaped}</span>`;
-        case 'comment': return `<span class="sql-cmt">${escaped}</span>`;
-        case 'backtick': return `<span class="sql-bt">${escaped}</span>`;
-        case 'paren': return `<span class="sql-paren">${escaped}</span>`;
-        default: return escaped;
-      }
-    })
-    .join('');
-}
-
-/* ---------- Autocomplete ---------- */
-const SQL_COMPLETIONS: { label: string; kind: string }[] = [
-  ...['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'IN', 'IS', 'NULL', 'TRUE', 'FALSE',
+const SQL_COMPLETIONS: Completion[] = [
+  ...[
+    'SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'IN', 'IS', 'NULL', 'TRUE', 'FALSE',
     'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'CREATE TABLE', 'ALTER TABLE', 'DROP TABLE',
     'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'CROSS JOIN', 'ON', 'AS',
     'GROUP BY', 'ORDER BY', 'ASC', 'DESC', 'HAVING', 'LIMIT', 'OFFSET', 'UNION ALL',
@@ -196,286 +25,471 @@ const SQL_COMPLETIONS: { label: string; kind: string }[] = [
     'ROUND', 'FLOOR', 'CEIL', 'ABS', 'GREATEST', 'LEAST', 'IF',
     'ROW_NUMBER', 'RANK', 'DENSE_RANK', 'LAG', 'LEAD',
     'EXPLAIN', 'SHOW', 'DESCRIBE', 'USE', 'BEGIN', 'COMMIT', 'ROLLBACK',
-  ].map((label) => ({ label, kind: 'keyword' })),
+  ].map((label) => ({ label, kind: 'keyword' as const })),
 ];
 
-interface Completion {
-  label: string;
-  kind: 'keyword' | 'table' | 'column';
-  sub?: string;
+const KEYWORDS_NEEDING_SPACE = /^(SELECT|FROM|WHERE|AND|OR|SET|ON|AS|IN|IS|BY|JOIN|INTO|VALUES|LIMIT|DESC|ASC|ALL|END)$/i;
+
+let monacoConfigured = false;
+
+function configureMonaco() {
+  if (monacoConfigured) return;
+
+  (globalThis as typeof globalThis & { MonacoEnvironment?: monaco.Environment }).MonacoEnvironment = {
+    getWorker() {
+      return new editorWorker();
+    },
+  };
+
+  monaco.editor.defineTheme('dbmind-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'keyword.sql', foreground: 'c792ea', fontStyle: 'bold' },
+      { token: 'predefined.sql', foreground: '82aaff' },
+      { token: 'string.sql', foreground: 'c3e88d' },
+      { token: 'number.sql', foreground: 'f78c6c' },
+      { token: 'comment.sql', foreground: '676e95', fontStyle: 'italic' },
+      { token: 'operator.sql', foreground: '89ddff' },
+    ],
+    colors: {
+      'editor.background': '#0f0f17',
+      'editor.foreground': '#d9d9e6',
+      'editorLineNumber.foreground': '#59596d',
+      'editorLineNumber.activeForeground': '#ececf5',
+      'editorCursor.foreground': '#ececf5',
+      'editor.selectionBackground': '#8b7cff4d',
+      'editor.inactiveSelectionBackground': '#8b7cff25',
+      'editorSuggestWidget.background': '#1c1c28',
+      'editorSuggestWidget.border': '#ffffff24',
+      'editorSuggestWidget.foreground': '#ececf5',
+      'editorSuggestWidget.selectedBackground': '#8b7cff2e',
+      'editorSuggestWidget.highlightForeground': '#8b7cff',
+    },
+  });
+
+  monaco.editor.defineTheme('dbmind-light', {
+    base: 'vs',
+    inherit: true,
+    rules: [
+      { token: 'keyword.sql', foreground: '7c3aed', fontStyle: 'bold' },
+      { token: 'predefined.sql', foreground: '2563eb' },
+      { token: 'string.sql', foreground: '059669' },
+      { token: 'number.sql', foreground: 'dc2626' },
+      { token: 'comment.sql', foreground: '9ca3af', fontStyle: 'italic' },
+      { token: 'operator.sql', foreground: '0ea5e9' },
+    ],
+    colors: {
+      'editor.background': '#f2f5fa',
+      'editor.foreground': '#22304a',
+      'editorLineNumber.foreground': '#8a93a5',
+      'editorLineNumber.activeForeground': '#172033',
+      'editorCursor.foreground': '#22304a',
+      'editor.selectionBackground': '#4f46e52e',
+      'editor.inactiveSelectionBackground': '#4f46e51c',
+      'editorSuggestWidget.background': '#ffffff',
+      'editorSuggestWidget.border': '#20293938',
+      'editorSuggestWidget.foreground': '#172033',
+      'editorSuggestWidget.selectedBackground': '#4f46e51f',
+      'editorSuggestWidget.highlightForeground': '#4f46e5',
+    },
+  });
+
+  monacoConfigured = true;
+}
+
+function getThemeName() {
+  return document.querySelector('.app-shell')?.classList.contains('theme-light') ? 'dbmind-light' : 'dbmind-dark';
 }
 
 function getCurrentWord(text: string, cursor: number): { word: string; start: number; end: number } | null {
   const before = text.slice(0, cursor);
   const match = before.match(/([\w.`]+)$/);
-  if (!match) return null;
-  return { word: match[1], start: match.index!, end: cursor };
+  if (!match || typeof match.index !== 'number') return null;
+  return { word: match[1], start: match.index, end: cursor };
+}
+
+function stripIdentifierQuotes(value: string): string {
+  return value.trim().replace(/^`+|`+$/g, '');
+}
+
+function normalizeIdentifier(value: string): string {
+  return stripIdentifierQuotes(value).toLowerCase();
+}
+
+function startsWithIdentifier(value: string, prefix: string): boolean {
+  return normalizeIdentifier(value).startsWith(normalizeIdentifier(prefix));
+}
+
+function splitSqlPath(word: string): string[] {
+  return word.split('.').map(stripIdentifierQuotes);
+}
+
+function findSchemaKey(schemaMap: Record<string, TableSchema[]>, dbName: string): string | undefined {
+  const target = normalizeIdentifier(dbName);
+  return Object.keys(schemaMap).find((key) => key.toLowerCase() === target);
+}
+
+function findTable(tables: TableSchema[] | undefined, tableName: string): TableSchema | undefined {
+  const target = normalizeIdentifier(tableName);
+  return tables?.find((table) => table.name.toLowerCase() === target);
+}
+
+function uniqueNames(names: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const name of names) {
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(name);
+  }
+
+  return result;
+}
+
+function knownDatabaseNames(schemaMap: Record<string, TableSchema[]>, selectedDbs: string[], databaseNames: string[]): string[] {
+  return uniqueNames([...selectedDbs, ...databaseNames, ...Object.keys(schemaMap)]);
+}
+
+function activeDatabaseNames(schemaMap: Record<string, TableSchema[]>, selectedDbs: string[], databaseNames: string[]): string[] {
+  const knownDbs = knownDatabaseNames(schemaMap, selectedDbs, databaseNames);
+  return selectedDbs.length ? selectedDbs : knownDbs;
+}
+
+function collectTableAliases(
+  text: string,
+  schemaMap: Record<string, TableSchema[]>,
+  selectedDbs: string[],
+  databaseNames: string[],
+  currentDb?: string
+): Record<string, { dbName?: string; tableName: string }> {
+  const aliases: Record<string, { dbName?: string; tableName: string }> = {};
+  const activeDbs = activeDatabaseNames(schemaMap, selectedDbs, databaseNames);
+  const sourcePattern = /\b(?:from|join)\s+((?:`[^`]+`|\w+)(?:\s*\.\s*(?:`[^`]+`|\w+))?)(?:\s+(?:as\s+)?(`[^`]+`|\w+))?/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = sourcePattern.exec(text))) {
+    const source = match[1].replace(/\s+/g, '');
+    const alias = match[2] ? stripIdentifierQuotes(match[2]) : '';
+    const parts = splitSqlPath(source);
+    const tableName = parts.length > 1 ? parts[1] : parts[0];
+    let dbName = parts.length > 1 ? findSchemaKey(schemaMap, parts[0]) : currentDb;
+
+    if (!dbName && tableName) {
+      dbName = activeDbs.find((db) => findTable(schemaMap[db], tableName));
+    }
+
+    if (alias && tableName && !SQL_COMPLETIONS.some((item) => item.label.toLowerCase() === alias.toLowerCase())) {
+      aliases[alias.toLowerCase()] = { dbName, tableName };
+    }
+  }
+
+  return aliases;
 }
 
 function filterCompletions(
   word: string,
+  textBeforeCursor: string,
   schemaMap: Record<string, TableSchema[]>,
   selectedDbs: string[],
+  databaseNames: string[],
   currentDb?: string
 ): Completion[] {
-  const lower = word.toLowerCase().replace(/^`|`$/g, '');
+  const lower = normalizeIdentifier(word);
   const results: Completion[] = [];
+  const activeDbs = activeDatabaseNames(schemaMap, selectedDbs, databaseNames);
+  const knownDbs = knownDatabaseNames(schemaMap, selectedDbs, databaseNames);
+  const aliases = collectTableAliases(textBeforeCursor, schemaMap, selectedDbs, databaseNames, currentDb);
+  const pushUnique = (completion: Completion) => {
+    const key = `${completion.kind}:${completion.label}:${completion.sub ?? ''}`;
+    if (!results.some((item) => `${item.kind}:${item.label}:${item.sub ?? ''}` === key)) {
+      results.push(completion);
+    }
+  };
 
-  if (lower.includes('.')) {
-    // db.table or table.column context
-    const [prefix, suffix] = lower.split('.');
-    const prefixClean = prefix.replace(/^`|`$/g, '');
-    const suffixClean = (suffix || '').replace(/^`|`$/g, '').toLowerCase();
+  if (word.includes('.')) {
+    const parts = splitSqlPath(word);
+    const suffix = parts.at(-1) ?? '';
+    const suffixClean = normalizeIdentifier(suffix);
 
-    // Check if prefix is a database name
-    const dbTables = schemaMap[prefixClean];
-    if (dbTables) {
-      for (const t of dbTables) {
-        if (t.name.toLowerCase().startsWith(suffixClean)) {
-          results.push({ label: `\`${prefixClean}\`.\`${t.name}\``, kind: 'table' });
+    if (parts.length === 2) {
+      const prefix = parts[0];
+      const dbKey = findSchemaKey(schemaMap, prefix);
+
+      if (dbKey) {
+        const dbTables = schemaMap[dbKey] ?? [];
+        for (const table of dbTables) {
+          if (startsWithIdentifier(table.name, suffixClean)) {
+            pushUnique({ label: table.name, kind: 'table', sub: dbKey });
+          }
+        }
+        return results.slice(0, 50);
+      }
+
+      const aliasTarget = aliases[normalizeIdentifier(prefix)];
+      if (aliasTarget) {
+        const dbKeyForAlias = aliasTarget.dbName ? findSchemaKey(schemaMap, aliasTarget.dbName) : undefined;
+        const aliasTable = findTable(dbKeyForAlias ? schemaMap[dbKeyForAlias] : undefined, aliasTarget.tableName);
+        if (aliasTable) {
+          for (const column of aliasTable.columns) {
+            if (startsWithIdentifier(column.name, suffixClean)) {
+              pushUnique({ label: column.name, kind: 'column', sub: `${aliasTable.name} · ${column.type}` });
+            }
+          }
+          return results.slice(0, 50);
         }
       }
+
+      for (const dbName of activeDbs) {
+        const table = findTable(schemaMap[dbName], prefix);
+        if (!table) continue;
+
+        for (const column of table.columns) {
+          if (startsWithIdentifier(column.name, suffixClean)) {
+            pushUnique({ label: column.name, kind: 'column', sub: `${dbName} · ${column.type}` });
+          }
+        }
+        return results.slice(0, 50);
+      }
+
       return results;
     }
 
-    // Check if prefix is a table name — suggest columns
-    for (const [, tables] of Object.entries(schemaMap)) {
-      const table = tables.find((t) => t.name === prefixClean);
+    if (parts.length >= 3) {
+      const dbKey = findSchemaKey(schemaMap, parts[parts.length - 3]);
+      const tableName = parts[parts.length - 2];
+      const table = findTable(dbKey ? schemaMap[dbKey] : undefined, tableName);
+
       if (table) {
-        for (const col of table.columns) {
-          if (col.name.toLowerCase().startsWith(suffixClean)) {
-            results.push({ label: col.name, kind: 'column', sub: `${col.type}` });
+        for (const column of table.columns) {
+          if (startsWithIdentifier(column.name, suffixClean)) {
+            pushUnique({ label: column.name, kind: 'column', sub: `${dbKey} · ${table.name} · ${column.type}` });
           }
         }
-        return results;
       }
+
+      return results.slice(0, 50);
     }
+
     return results;
   }
 
-  // Keyword match
-  for (const kw of SQL_COMPLETIONS) {
-    if (kw.label.toLowerCase().startsWith(lower)) {
-      results.push({ label: kw.label, kind: 'keyword' });
+  for (const completion of SQL_COMPLETIONS) {
+    if (completion.label.toLowerCase().startsWith(lower)) {
+      pushUnique(completion);
     }
   }
 
-  // Table match from selected databases
-  for (const db of selectedDbs) {
+  for (const db of knownDbs) {
+    if (startsWithIdentifier(db, lower)) {
+      pushUnique({ label: db, kind: 'database', sub: 'database' });
+    }
+  }
+
+  for (const db of activeDbs) {
     const tables = schemaMap[db];
     if (!tables) continue;
-    for (const t of tables) {
-      if (t.name.toLowerCase().startsWith(lower)) {
-        results.push({ label: t.name, kind: 'table', sub: db });
+    for (const table of tables) {
+      if (startsWithIdentifier(table.name, lower)) {
+        pushUnique({ label: table.name, kind: 'table', sub: db });
       }
     }
   }
 
-  // Also check tables from current database (first selected or connection default)
   const primaryDb = currentDb || selectedDbs[0];
   if (primaryDb) {
-    const tables = schemaMap[primaryDb];
+    const primaryDbKey = findSchemaKey(schemaMap, primaryDb);
+    const tables = primaryDbKey ? schemaMap[primaryDbKey] : undefined;
     if (tables) {
-      for (const t of tables) {
-        if (t.name.toLowerCase().startsWith(lower) && !results.some((r) => r.label === t.name)) {
-          results.push({ label: t.name, kind: 'table', sub: primaryDb });
+      for (const table of tables) {
+        if (startsWithIdentifier(table.name, lower)) {
+          pushUnique({ label: table.name, kind: 'table', sub: primaryDbKey });
         }
       }
     }
   }
 
-  return results.slice(0, 30);
+  for (const dbName of activeDbs) {
+    const tables = schemaMap[dbName];
+    if (!tables) continue;
+    for (const table of tables) {
+      for (const column of table.columns) {
+        if (startsWithIdentifier(column.name, lower)) {
+          pushUnique({ label: column.name, kind: 'column', sub: `${dbName} · ${table.name} · ${column.type}` });
+        }
+      }
+    }
+  }
+
+  return results.slice(0, 50);
 }
 
-/* ---------- Component ---------- */
+function completionKind(kind: CompletionKind) {
+  if (kind === 'database') return monaco.languages.CompletionItemKind.Module;
+  if (kind === 'table') return monaco.languages.CompletionItemKind.Class;
+  if (kind === 'column') return monaco.languages.CompletionItemKind.Field;
+  return monaco.languages.CompletionItemKind.Keyword;
+}
+
+function insertionText(completion: Completion) {
+  if (completion.kind !== 'keyword') return completion.label;
+  const insert = completion.label.toUpperCase();
+  return KEYWORDS_NEEDING_SPACE.test(insert) ? `${insert} ` : insert;
+}
+
 export function SqlEditor({
   value,
   onChange,
   schemaMap,
   selectedDbs,
+  databaseNames,
   currentDb,
 }: {
   value: string;
   onChange: (value: string) => void;
   schemaMap: Record<string, TableSchema[]>;
   selectedDbs: string[];
+  databaseNames?: string[];
   currentDb?: string;
 }) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const backdropRef = useRef<HTMLDivElement>(null);
-  const [completions, setCompletions] = useState<Completion[]>([]);
-  const [completionIdx, setCompletionIdx] = useState(0);
-  const [cursorPos, setCursorPos] = useState(0);
-  const isComposing = useRef(false);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const valueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  const isUpdatingFromProps = useRef(false);
 
-  const tokens = useMemo(() => tokenize(value), [value]);
-  const highlightedHtml = useMemo(() => tokensToHtml(tokens), [tokens]);
+  const completionProvider = useMemo(
+    () => ({
+      provideCompletionItems(model: monaco.editor.ITextModel, position: monaco.Position): monaco.languages.ProviderResult<monaco.languages.CompletionList> {
+        const text = model.getValue();
+        const offset = model.getOffsetAt(position);
+        const wordInfo = getCurrentWord(text, offset);
+        const modelWord = model.getWordUntilPosition(position);
+        const fallbackStart = new monaco.Position(position.lineNumber, modelWord.startColumn);
+        const fallbackEnd = new monaco.Position(position.lineNumber, modelWord.endColumn);
+        const replaceStartOffset = wordInfo && wordInfo.word.includes('.') ? wordInfo.start + wordInfo.word.lastIndexOf('.') + 1 : wordInfo?.start;
+        const start = typeof replaceStartOffset === 'number' ? model.getPositionAt(replaceStartOffset) : fallbackStart;
+        const end = wordInfo ? model.getPositionAt(wordInfo.end) : fallbackEnd;
+        const typedWord = wordInfo?.word ?? modelWord.word;
+        const range = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column);
 
-  const syncScroll = useCallback(() => {
-    if (textareaRef.current && backdropRef.current) {
-      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
-      backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
-    }
-  }, []);
-
-  const openCompletions = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const pos = el.selectionStart;
-    setCursorPos(pos);
-    const wordInfo = getCurrentWord(value, pos);
-    if (!wordInfo || wordInfo.word.length === 0) {
-      setCompletions([]);
-      return;
-    }
-    const items = filterCompletions(wordInfo.word, schemaMap, selectedDbs, currentDb);
-    setCompletions(items);
-    setCompletionIdx(0);
-  }, [value, schemaMap, selectedDbs, currentDb]);
-
-  const closeCompletions = useCallback(() => {
-    setCompletions([]);
-  }, []);
-
-  const applyCompletion = useCallback(
-    (completion: Completion) => {
-      const el = textareaRef.current;
-      if (!el) return;
-      const pos = el.selectionStart;
-      const wordInfo = getCurrentWord(value, pos);
-      if (!wordInfo) return;
-      const before = value.slice(0, wordInfo.start);
-      const after = value.slice(wordInfo.end);
-
-      let insert = completion.label;
-      // uppercase keywords
-      if (completion.kind === 'keyword') insert = completion.label.toUpperCase();
-
-      // Add space after keywords that need it
-      const needsSpace = /^(SELECT|FROM|WHERE|AND|OR|SET|ON|AS|IN|IS|BY|JOIN|INTO|VALUES|LIMIT|DESC|ASC|ALL|END)$/i.test(insert);
-      if (needsSpace) insert += ' ';
-
-      const newValue = before + insert + after;
-      onChange(newValue);
-
-      // Place cursor after insertion
-      setTimeout(() => {
-        if (textareaRef.current) {
-          const newPos = before.length + insert.length;
-          textareaRef.current.selectionStart = newPos;
-          textareaRef.current.selectionEnd = newPos;
+        if (!typedWord && text[offset - 1] !== '.') {
+          return { suggestions: [] };
         }
-      }, 0);
 
-      closeCompletions();
-    },
-    [value, onChange, closeCompletions]
+        const suggestions = filterCompletions(typedWord, text.slice(0, offset), schemaMap, selectedDbs, databaseNames ?? [], currentDb).map((item) => ({
+          label: item.label,
+          kind: completionKind(item.kind),
+          detail: item.sub,
+          insertText: insertionText(item),
+          range,
+          sortText:
+            item.kind === 'keyword'
+              ? `1_${item.label}`
+              : item.kind === 'database'
+                ? `2_${item.label}`
+                : item.kind === 'table'
+                  ? `3_${item.label}`
+                  : `4_${item.label}`,
+        }));
+
+        return { suggestions };
+      },
+    }),
+    [currentDb, databaseNames, schemaMap, selectedDbs]
   );
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent) => {
-      if (completions.length > 0) {
-        if (event.key === 'ArrowDown') {
-          event.preventDefault();
-          setCompletionIdx((prev) => Math.min(prev + 1, completions.length - 1));
-          return;
-        }
-        if (event.key === 'ArrowUp') {
-          event.preventDefault();
-          setCompletionIdx((prev) => Math.max(prev - 1, 0));
-          return;
-        }
-        if (event.key === 'Enter' || event.key === 'Tab') {
-          event.preventDefault();
-          applyCompletion(completions[completionIdx]);
-          return;
-        }
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          closeCompletions();
-          return;
-        }
-      }
-      // Re-trigger autocomplete on specific keys
-      if (event.key === '.' || event.key === '`') {
-        setTimeout(() => openCompletions(), 0);
-      }
-    },
-    [completions, completionIdx, applyCompletion, closeCompletions, openCompletions]
-  );
-
-  // Calculate dropdown position relative to cursor
-  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   useEffect(() => {
-    if (completions.length === 0) return;
-    const el = textareaRef.current;
-    if (!el) return;
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
-    // Approximate cursor position using a mirror technique
-    const beforeText = value.slice(0, cursorPos);
-    const lines = beforeText.split('\n');
-    const currentLine = lines.length;
-    const currentCol = lines[lines.length - 1].length;
+  useEffect(() => {
+    valueRef.current = value;
+    const editor = editorRef.current;
+    if (!editor || editor.getValue() === value) return;
 
-    const lineHeight = 19; // approximate
-    const charWidth = 7.8; // approximate mono
-    const paddingTop = 14;
-    const paddingLeft = 16;
+    isUpdatingFromProps.current = true;
+    editor.setValue(value);
+    isUpdatingFromProps.current = false;
+  }, [value]);
 
-    // Clamp position to stay within editor
-    const top = Math.min(currentLine * lineHeight + paddingTop, (textareaRef.current?.clientHeight || 200) - 160);
-    const left = Math.min(currentCol * charWidth + paddingLeft, (textareaRef.current?.clientWidth || 400) - 260);
+  useEffect(() => {
+    configureMonaco();
+    const host = hostRef.current;
+    if (!host) return;
 
-    setDropdownStyle({ top: `${top}px`, left: `${left}px` });
-  }, [completions, cursorPos, value]);
+    const editor = monaco.editor.create(host, {
+      value,
+      language: 'sql',
+      theme: getThemeName(),
+      automaticLayout: true,
+      minimap: { enabled: false },
+      fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+      fontSize: 13,
+      lineHeight: 23,
+      padding: { top: 18, bottom: 18 },
+      scrollBeyondLastLine: false,
+      renderLineHighlight: 'gutter',
+      roundedSelection: false,
+      smoothScrolling: true,
+      tabSize: 2,
+      wordWrap: 'off',
+      quickSuggestions: { other: true, comments: false, strings: false },
+      quickSuggestionsDelay: 80,
+      suggestOnTriggerCharacters: true,
+      suggest: { showWords: false },
+      wordBasedSuggestions: 'off',
+      acceptSuggestionOnEnter: 'on',
+      fixedOverflowWidgets: true,
+      overviewRulerLanes: 0,
+    });
+
+    editorRef.current = editor;
+    const contentDisposable = editor.onDidChangeModelContent((event) => {
+      if (isUpdatingFromProps.current) return;
+      const nextValue = editor.getValue();
+      valueRef.current = nextValue;
+      onChangeRef.current(nextValue);
+
+      const shouldSuggest = event.changes.some((change) => /^[\w.`]+$/.test(change.text));
+      if (shouldSuggest) {
+        window.setTimeout(() => {
+          editor.trigger('dbmind', 'editor.action.triggerSuggest', {});
+        }, 0);
+      }
+    });
+
+    const themeTarget = document.querySelector('.app-shell') ?? document.documentElement;
+    const themeObserver = new MutationObserver(() => {
+      monaco.editor.setTheme(getThemeName());
+    });
+    themeObserver.observe(themeTarget, { attributes: true, attributeFilter: ['class'] });
+
+    return () => {
+      contentDisposable.dispose();
+      themeObserver.disconnect();
+      editor.dispose();
+      editorRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const provider = monaco.languages.registerCompletionItemProvider('sql', {
+      triggerCharacters: ['.', '`'],
+      provideCompletionItems: completionProvider.provideCompletionItems,
+    });
+    return () => provider.dispose();
+  }, [completionProvider]);
+
+  const focusEditor = useCallback(() => {
+    editorRef.current?.focus();
+  }, []);
 
   return (
-    <div className="sql-editor-wrap">
-      <div className="sql-editor-backdrop" ref={backdropRef} aria-hidden="true">
-        <pre><code dangerouslySetInnerHTML={{ __html: highlightedHtml + '\n' }} /></pre>
-      </div>
-      <textarea
-        ref={textareaRef}
-        className="sql-editor-textarea"
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-          if (!isComposing.current) {
-            setTimeout(() => openCompletions(), 0);
-          }
-        }}
-        onCompositionStart={() => { isComposing.current = true; }}
-        onCompositionEnd={() => {
-          isComposing.current = false;
-          setTimeout(() => openCompletions(), 0);
-        }}
-        onScroll={syncScroll}
-        onKeyDown={handleKeyDown}
-        onClick={() => {
-          syncScroll();
-          setTimeout(() => openCompletions(), 0);
-        }}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoCorrect="off"
-        wrap="off"
-      />
-
-      {completions.length > 0 && (
-        <div className="sql-autocomplete" style={dropdownStyle}>
-          {completions.map((item, idx) => (
-            <button
-              key={`${item.label}-${idx}`}
-              className={`sql-ac-item ${idx === completionIdx ? 'active' : ''}`}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => applyCompletion(item)}
-            >
-              <span className={`sql-ac-label sql-ac-${item.kind}`}>{item.label}</span>
-              {item.sub && <span className="sql-ac-sub">{item.sub}</span>}
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="sql-editor-wrap" onClick={focusEditor}>
+      <div ref={hostRef} className="sql-monaco-editor" />
     </div>
   );
 }

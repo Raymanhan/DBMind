@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Save, Wand2 } from 'lucide-react';
 import type {
   DbmindApi,
@@ -34,6 +34,7 @@ export function TableDesignerModal({
   const [previewSql, setPreviewSql] = useState('');
   const [localLoading, setLocalLoading] = useState(false);
   const busy = loading || localLoading;
+  const dirty = useMemo(() => Boolean(original && draft && JSON.stringify(original) !== JSON.stringify(draft)), [original, draft]);
 
   useEffect(() => {
     let mounted = true;
@@ -138,15 +139,20 @@ export function TableDesignerModal({
     }
   }
 
+  function requestClose() {
+    if (dirty && !window.confirm('表设计有未应用的修改，确定关闭吗？')) return;
+    onClose();
+  }
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={requestClose}>
       <div className="modal-content table-designer-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-head">
           <div>
             <h2>表设计器 · {target.database}.{target.table}</h2>
-            <p>结构修改会先生成 ALTER SQL，确认后执行。</p>
+            <p>{dirty ? '有未应用的结构修改。生成 ALTER SQL 后再确认执行。' : '结构修改会先生成 ALTER SQL，确认后执行。'}</p>
           </div>
-          <button className="icon-btn" onClick={onClose}>✕</button>
+          <button className="icon-btn" onClick={requestClose}>✕</button>
         </div>
         {!draft ? (
           <div className="empty-state"><span className="spinner" /> 正在读取表结构...</div>
@@ -253,7 +259,7 @@ export function TableDesignerModal({
                 <h3>DDL 预览</h3>
                 <div>
                   <button onClick={preview} disabled={busy}><Wand2 size={14} /> {localLoading ? '生成中' : '生成 ALTER'}</button>
-                  <button className="primary" onClick={apply} disabled={busy || !draft}><Save size={14} /> {loading ? '执行中' : '确认执行'}</button>
+                  <button className="primary" onClick={apply} disabled={busy || !draft || !dirty}><Save size={14} /> {loading ? '执行中' : '确认执行'}</button>
                 </div>
               </div>
               <pre className="sql-preview">{previewSql || '点击“生成 ALTER”预览将要执行的结构变更。'}</pre>
