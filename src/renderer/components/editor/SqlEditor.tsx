@@ -519,12 +519,18 @@ export const SqlEditor = memo(function SqlEditor({
           if (prevLine.endsWith(';')) break;
           lineStart--;
         }
-        // Walk forward from clicked line to find statement end (before next ; or doc end)
+        // Walk forward to find statement end. Stop at ; or at a line that starts a new statement
+        // (non-empty, non-comment line preceded by empty or ;-ended line)
         const totalLines = model.getLineCount();
         let lineEnd = lineNumber;
         while (lineEnd < totalLines) {
           const currLine = model.getLineContent(lineEnd).trim();
           if (currLine.endsWith(';')) break;
+          // Check if next line starts a new statement
+          const nextLine = model.getLineContent(lineEnd + 1).trim();
+          if (nextLine.length > 0 && !nextLine.startsWith('--')) {
+            if (currLine.length === 0 || currLine.endsWith(';')) break;
+          }
           lineEnd++;
         }
         // If lineStart == 1 and lineEnd == totalLines, execute everything

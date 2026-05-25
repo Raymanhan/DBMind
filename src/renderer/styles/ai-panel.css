@@ -24,6 +24,19 @@
   justify-content: center;
   padding: 12px 8px;
 }
+.ai-panel:not(.collapsed) {
+  transition: flex 0.35s var(--ease-spring);
+}
+.ai-panel.collapsed {
+  transition: flex 0.3s var(--ease-out);
+}
+.ai-panel-body {
+  transition: opacity 0.2s var(--ease-out);
+}
+.ai-panel.collapsed .ai-panel-body {
+  opacity: 0;
+  transition: opacity 0.12s var(--ease-out);
+}
 .ai-collapsed-btn {
   display: flex;
   flex-direction: column;

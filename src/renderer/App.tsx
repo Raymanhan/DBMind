@@ -198,6 +198,8 @@ export function App() {
         return null;
     }, [activeConnection, activeWorkTab, activeTableSchema]);
 
+    const refreshCurrentResult = useCallback(() => runWorkTabQuery(activeWorkTabId), [runWorkTabQuery, activeWorkTabId]);
+
     const {
         activeInlineEditor, setActiveInlineEditor, pendingEdits, setPendingEdits, pendingEditsMap,
         pendingSqlConfirm, setPendingSqlConfirm, beginCellEdit, finishCellEdit,
@@ -206,7 +208,7 @@ export function App() {
         api, activeConnectionId, activeResult,
         dbName: activeWorkTab?.dbName, tableName: activeWorkTab?.tableName, tableSchema: activeTableSchema,
         setLoadingFlag: setQueryLoading, setNotice,
-        onRefreshResult: () => runWorkTabQuery(activeWorkTabId), getCellEditBlockReason
+        onRefreshResult: refreshCurrentResult, getCellEditBlockReason
     });
 
     // Clear pending edits when switching to a different tab
@@ -361,18 +363,46 @@ export function App() {
         setNotice(`已导出 ${filename}`);
     }, [activeResult, setNotice]);
 
-    const copyText = useCallback(async (value: unknown, label = '内容') => {
-        const text = value === null || value === undefined ? '' : String(value);
-        try {
-            await navigator.clipboard.writeText(text);
-            setNotice(`已复制${label}`);
-        } catch {
-            setNotice('复制失败');
-        }
-    }, [setNotice]);
 
     const visibleRows = useMemo(() => activeResult?.rows.slice(0, 1000) ?? [], [activeResult]);
     const isResultTruncated = Boolean(activeResult && activeResult.rows.length > visibleRows.length);
+
+    // Ref-based callbacks: avoid rebuilding resultTableBody when edit state changes
+    const beginCellEditRef = useRef(beginCellEdit);
+    beginCellEditRef.current = beginCellEdit;
+    const finishCellEditRef = useRef(finishCellEdit);
+    finishCellEditRef.current = finishCellEdit;
+    const visibleRowsRef = useRef(visibleRows);
+    visibleRowsRef.current = visibleRows;
+
+    const cancelEdit = useCallback(() => setActiveInlineEditor(null), []);
+
+    // Event delegation: double-click on tbody → beginCellEdit
+    const handleTableDoubleClick = useCallback((e: React.MouseEvent<HTMLTableSectionElement>) => {
+        const td = (e.target as HTMLElement).closest('[data-cell]');
+        if (!td) return;
+        const rowIndex = Number(td.getAttribute('data-row-index'));
+        const column = td.getAttribute('data-column');
+        if (isNaN(rowIndex) || !column) return;
+        const row = visibleRowsRef.current[rowIndex];
+        if (row) beginCellEditRef.current(rowIndex, row, column);
+    }, []);
+
+    const handleTableCellCopy = useCallback((e: React.MouseEvent<HTMLTableSectionElement>) => {
+        const btn = (e.target as HTMLElement).closest('.cell-copy-btn');
+        if (!btn) return;
+        e.stopPropagation();
+        const td = btn.closest('[data-cell]');
+        if (!td) return;
+        const rowIndex = Number(td.getAttribute('data-row-index'));
+        const column = td.getAttribute('data-column');
+        if (isNaN(rowIndex) || !column) return;
+        const row = visibleRowsRef.current[rowIndex];
+        if (row) {
+            const text = row[column] === null || row[column] === undefined ? '' : String(row[column]);
+            navigator.clipboard.writeText(text).then(() => setNotice('已复制单元格')).catch(() => setNotice('复制失败'));
+        }
+    }, [setNotice]);
 
     const resultTableBody = useMemo(() => {
       if (!activeResult) return null;
@@ -398,17 +428,16 @@ export function App() {
                 editorState={activeInlineEditor}
                 displayValue={displayValue}
                 isNullDisplay={Boolean(pendingEdit?.asNull)}
-                onBeginEdit={() => beginCellEdit(index, row, column)}
+                onBeginEdit={() => beginCellEditRef.current(index, row, column)}
                 onEditorChange={setActiveInlineEditor}
-                onCommit={finishCellEdit}
-                onCancel={() => setActiveInlineEditor(null)}
-                onCopy={() => copyText(row[column], '单元格')}
+                onCommit={finishCellEditRef.current}
+                onCancel={cancelEdit}
               />
             );
           })}
         </tr>
       ));
-    }, [visibleRows, activeResult, pendingEditsMap, activeColumnSchemaMap, activeInlineEditor, getCellEditBlockReason, beginCellEdit, setActiveInlineEditor, finishCellEdit, copyText, formatValue]);
+    }, [visibleRows, activeResult, pendingEditsMap, activeColumnSchemaMap, activeInlineEditor, getCellEditBlockReason, setActiveInlineEditor, cancelEdit, formatValue]);
 
     const gridStyle = useMemo(() => ({
       gridTemplateColumns: `${sidebarWidth}px ${aiCollapsed ? 'minmax(720px, 1fr)' : 'minmax(640px, 1fr)'} ${aiCollapsed ? 56 : aiPanelWidth}px`
@@ -490,7 +519,6 @@ export function App() {
                             queryLoading={loading.query}
                             aiLoading={loading.ai}
                             onRunQuery={runQuery}
-                            onAiGenerate={generateSql}
                             onDesignTable={designActiveTable}
                         />
                         <WorkTabStrip
@@ -598,7 +626,7 @@ export function App() {
                                             ))}
                                         </tr>
                                         </thead>
-                                        <tbody>{resultTableBody}</tbody>
+                                        <tbody onDoubleClick={handleTableDoubleClick} onClick={handleTableCellCopy}>{resultTableBody}</tbody>
                                     </table>
                                 ) : (
                                     <div className="empty-state workspace-empty">
@@ -622,7 +650,7 @@ export function App() {
                     <AiPanel
                         aiPanelWidth={aiPanelWidth}
                         collapsed={aiCollapsed}
-                        onToggleCollapsed={() => setAiCollapsed((value) => !value)}
+                        onToggleCollapsed={toggleAiPanelCollapsed}
                         onStartResize={startSideResize}
                         selectedSchema={selectedSchema}
                         chat={activeMessages}
@@ -676,7 +704,7 @@ export function App() {
                     loading={loading.query}
                     onLoading={(value) => setLoadingFlag('query', value)}
                     onNotice={setNotice}
-                    onClose={() => setTableDesignerTarget(null)}
+                    onClose={closeTableDesigner}
                     onApplied={async () => {
                         setPendingEdits([]);
                         setActiveInlineEditor(null);

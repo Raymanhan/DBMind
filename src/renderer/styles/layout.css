@@ -4,6 +4,7 @@
   height: 100vh;
   color: var(--text);
   overflow: hidden;
+  transition: grid-template-columns 0.35s var(--ease-spring);
   background:
     radial-gradient(circle at 25% 0%, rgba(91, 77, 255, 0.17), transparent 30%),
     radial-gradient(circle at 80% 10%, rgba(15, 183, 165, 0.12), transparent 25%),

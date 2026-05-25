@@ -8,13 +8,15 @@
   position: absolute;
   inset: 0;
   z-index: 12;
-  display: grid;
-  place-items: center;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   color: var(--text);
   background: rgba(10, 10, 15, 0.58);
   backdrop-filter: blur(2px);
-  font-size: 13px;
+  font-size: 12px;
 }
 .loading-overlay .spinner {
   width: 22px;

@@ -101,6 +101,10 @@
   font-size: 12px;
   cursor: pointer;
   gap: 8px;
+  transition: all 0.2s var(--ease-out);
+}
+.conv-item:active {
+  transform: scale(0.97);
 }
 .conv-item:last-child {
   border-bottom: 0;

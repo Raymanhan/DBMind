@@ -29,9 +29,14 @@
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--border);
   border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
 }
 .history-item:hover {
   border-color: var(--border-strong);
+}
+.history-item:active {
+  transform: scale(0.98);
 }
 .history-item strong {
   display: block;

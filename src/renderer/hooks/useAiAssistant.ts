@@ -61,6 +61,7 @@ export function useAiAssistant({
   conversationsRef.current = conversations;
   const activeConvIdRef = useRef(activeConversationId);
   activeConvIdRef.current = activeConversationId;
+  const generateSqlRef = useRef<(() => void) | undefined>(undefined);
 
   const activeMessages = useMemo(() => {
     const conv = conversations.find((c) => c.id === activeConversationId);
@@ -143,18 +144,27 @@ export function useAiAssistant({
   }, [mentionQuery]);
 
   const handleAiKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (!mentionQuery) return;
-    const opts = mentionOptionsRef.current;
-    const idx = mentionIndexRef.current;
-    if (opts.length === 0) return;
-    if (event.key === 'Escape') { setMentionQuery(null); event.preventDefault(); return; }
-    if (event.key === 'ArrowDown') { setMentionIndex((prev) => Math.min(prev + 1, opts.length - 1)); event.preventDefault(); return; }
-    if (event.key === 'ArrowUp') { setMentionIndex((prev) => Math.max(prev - 1, 0)); event.preventDefault(); return; }
-    if (event.key === 'Enter') {
-      const selected = opts[idx];
-      if (selected) { selectMention(selected.db, selected.table.name); event.preventDefault(); }
+    // Mention dropdown navigation
+    if (mentionQuery) {
+      const opts = mentionOptionsRef.current;
+      const idx = mentionIndexRef.current;
+      if (opts.length > 0) {
+        if (event.key === 'Escape') { setMentionQuery(null); event.preventDefault(); return; }
+        if (event.key === 'ArrowDown') { setMentionIndex((prev) => Math.min(prev + 1, opts.length - 1)); event.preventDefault(); return; }
+        if (event.key === 'ArrowUp') { setMentionIndex((prev) => Math.max(prev - 1, 0)); event.preventDefault(); return; }
+        if (event.key === 'Enter') {
+          const selected = opts[idx];
+          if (selected) { selectMention(selected.db, selected.table.name); event.preventDefault(); }
+          return;
+        }
+      }
     }
-  }, [mentionQuery, selectMention]);
+    // Enter sends, Shift+Enter for newline
+    if (event.key === 'Enter' && !event.shiftKey && aiInput.trim()) {
+      event.preventDefault();
+      generateSqlRef.current?.();
+    }
+  }, [mentionQuery, selectMention, aiInput]);
 
   const createConversation = useCallback(() => {
     const id = crypto.randomUUID();
@@ -246,6 +256,7 @@ export function useAiAssistant({
       );
     } finally { setLoadingFlag('ai', false); }
   }, [schemaMap, allTables, selectedSchema, api, activeConnection, updateActiveWorkTab, defaultProvider, setLoadingFlag, selectedTable]);
+  generateSqlRef.current = generateSql;
 
   const insertTableSelect = useCallback((limit = 100) => {
     if (!selectedSchema) { setNotice('请先选择一张表。'); return; }

@@ -177,7 +177,7 @@ export const AiPanel = memo(function AiPanel({
         <div className="composer-footer">
           <span>{mentionedTables.length ? `已引用 ${mentionedTables.join(', ')}` : '输入 @ 引用表'}</span>
           <button className="ai-settings-btn" onClick={onNavigateToSettings} title="AI 设置"><Settings size={14} /></button>
-          <button className="ai-generate-btn" onClick={onGenerate} disabled={busy}><Sparkles size={15} /> {aiLoading ? '生成中' : '生成 SQL'}</button>
+          <button className="ai-generate-btn" onClick={onGenerate} disabled={busy || !aiInput.trim()}><Sparkles size={15} /> {aiLoading ? '生成中' : '生成 SQL'}</button>
         </div>
       </div>
       </div>

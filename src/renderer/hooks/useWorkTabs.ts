@@ -38,13 +38,15 @@ export function useWorkTabs({
 
   const closeWorkTab = useCallback((tabId: string) => {
     if (tabId === 'console') return;
-    setWorkTabs((items) => {
-      const index = items.findIndex((tab) => tab.id === tabId);
-      const next = items.filter((tab) => tab.id !== tabId);
-      if (activeWorkTabId === tabId) setActiveWorkTabId(next[Math.max(0, index - 1)]?.id ?? 'console');
-      return next;
+    setWorkTabs((items) => items.filter((tab) => tab.id !== tabId));
+    setActiveWorkTabId((prev) => {
+      if (prev !== tabId) return prev;
+      // Compute the next tab without depending on the just-updated workTabs
+      const index = workTabs.findIndex((tab) => tab.id === tabId);
+      const next = workTabs.filter((tab) => tab.id !== tabId);
+      return next[Math.max(0, index - 1)]?.id ?? 'console';
     });
-  }, [activeWorkTabId]);
+  }, [workTabs]);
 
   const buildTableBaseSql = useCallback((table: TableSchema, dbName?: string) => {
     const cols = table.columns.map((c) => `  ${quoteMysqlIdentifier(c.name)}`).join(',\n') || '  *';

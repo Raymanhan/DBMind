@@ -1,4 +1,4 @@
-import { Bot, Database, Edit3, Layers3, Play, Server, Sparkles, Table2 } from 'lucide-react';
+import { Database, Edit3, Play, Server, Sparkles, Table2 } from 'lucide-react';
 import type { AiProviderConfig, DbConnectionConfig, WorkTab } from '../../../shared/types';
 
 export function TopBar({
@@ -12,7 +12,6 @@ export function TopBar({
   queryLoading,
   aiLoading,
   onRunQuery,
-  onAiGenerate,
   onDesignTable
 }: {
   workTab?: WorkTab;
@@ -25,7 +24,6 @@ export function TopBar({
   queryLoading: boolean;
   aiLoading: boolean;
   onRunQuery: () => void;
-  onAiGenerate: () => void;
   onDesignTable: () => void;
 }) {
   return (
@@ -42,7 +40,6 @@ export function TopBar({
             <Edit3 size={13} /> 设计
           </button>
         )}
-        <button className="ghost" onClick={onAiGenerate} disabled={aiLoading || queryLoading}><Sparkles size={13} /> {aiLoading ? '生成中' : 'AI'}</button>
         <button className="run-btn" onClick={onRunQuery} disabled={queryLoading || aiLoading}><Play size={14} /> {queryLoading ? '执行中' : '执行'}</button>
       </div>
     </header>

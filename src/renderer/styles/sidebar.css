@@ -163,6 +163,10 @@
   border: 1px solid transparent;
   border-radius: 6px;
   font-size: 11px;
+  transition: all 0.2s var(--ease-out);
+}
+.table-item:active {
+  transform: scale(0.97);
 }
 .connection-item {
   min-height: 46px;
@@ -292,7 +296,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   height: 34px;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.04);
@@ -590,4 +594,14 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   color: var(--accent);
   background: rgba(91, 77, 255, 0.12);
   border-color: rgba(91, 77, 255, 0.28);
+}
+
+/* ── Apple-style button feedback ── */
+button:active:not(:disabled) {
+  transform: scale(0.96);
+  transition: transform 0.1s var(--ease-out);
+}
+input:focus, select:focus, textarea:focus {
+  transition: border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
+  box-shadow: 0 0 0 3px rgba(91, 77, 255, 0.18);
 }

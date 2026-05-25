@@ -27,11 +27,11 @@ interface EditableCellProps {
   editorState: InlineCellEditorState | null;
   displayValue: string;
   isNullDisplay: boolean;
-  onBeginEdit: () => void;
+  onBeginEdit?: () => void;
   onEditorChange: (next: InlineCellEditorState) => void;
   onCommit: (next: InlineCellEditorState) => void;
   onCancel: () => void;
-  onCopy: () => void;
+  onCopy?: () => void;
 }
 
 type CellEditorKind = 'text' | 'long-text' | 'json' | 'date' | 'datetime' | 'time' | 'number' | 'binary';
@@ -225,14 +225,16 @@ export const EditableCell = memo(function EditableCell({
   return (
     <td
       className={tdClass}
+	      data-cell=""
+	      data-row-index={rowIndex}
+	      data-column={column}
       title={reason ?? (pendingEdit ? '已修改，双击重新编辑' : '双击编辑')}
-      onDoubleClick={onBeginEdit}
     >
       {isEditing && editorState ? (
         <>
           {needsFloatingEditor ? (
             <>
-              <button type="button" className="cell-open-popover" onClick={onBeginEdit}>
+              <button type="button" className="cell-open-popover" onClick={() => onBeginEdit?.()}>
                 <Maximize2 size={13}/>
                 {editorKind === 'json' ? 'JSON 编辑中' : '长文本编辑中'}
               </button>
@@ -305,7 +307,7 @@ export const EditableCell = memo(function EditableCell({
             type="button"
             onClick={(event) => {
               event.stopPropagation();
-              onCopy();
+              onCopy?.();
             }}
             title="复制单元格"
           >
