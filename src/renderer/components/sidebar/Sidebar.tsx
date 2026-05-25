@@ -1,4 +1,4 @@
-import { ChevronDown, Circle, Database, Edit3, Plus, RefreshCw, Search, Table2, Trash2 } from 'lucide-react';
+import { ChevronDown, Circle, Database, Edit3, History, Plus, RefreshCw, Search, Settings, Sparkles, Table2, Trash2 } from 'lucide-react';
 import type { DatabaseInfo, DbConnectionConfig, TableSchema } from '../../../shared/types';
 
 function tableKey(db: string, table: string): string {
@@ -35,7 +35,11 @@ export function Sidebar({
   onRefreshSchemas,
   onSelectTable,
   onOpenTableTab,
-  onStartResize
+  onStartResize,
+  view,
+  aiCollapsed,
+  onNavigate,
+  onToggleAi
 }: {
   activeConnection?: DbConnectionConfig;
   activeConnectionId: string;
@@ -67,18 +71,23 @@ export function Sidebar({
   onSelectTable: (t: string) => void;
   onOpenTableTab: (db: string, t: TableSchema) => void;
   onStartResize: (target: 'sidebar', size: number, e: React.MouseEvent) => void;
+  view: string;
+  aiCollapsed: boolean;
+  onNavigate: (v: string) => void;
+  onToggleAi: () => void;
 }) {
   const selectedObjectsCount = selectedDbs.reduce((total, dbName) => total + (schemaMap[dbName]?.length ?? 0), 0);
 
   return (
     <aside className="sidebar">
       <div className="panel-head">
+        <span className="brand-text">DB<span className="brand-accent">Mind</span></span>
         <div className="panel-title">
-          <p>连接</p>
+          <span><Circle size={6} fill="currentColor" /></span>
           <strong>{activeConnection?.name ?? '未连接'}</strong>
-          <span><Circle size={7} fill="currentColor" /> {activeConnection ? (activeConnection.driver === 'postgres' ? 'PostgreSQL' : 'MySQL') : '等待连接'}</span>
+          <span>{activeConnection ? (activeConnection.driver === 'postgres' ? 'PG' : 'MySQL') : ''}</span>
         </div>
-        <button className="icon-btn" title="新建连接" onClick={onNewConnection}><Plus size={16} /></button>
+        <button className="icon-btn" title="新建连接" onClick={onNewConnection}><Plus size={15} /></button>
       </div>
 
       <div className="connection-list">
@@ -115,12 +124,6 @@ export function Sidebar({
               <span>{selectedDbs.length ? `已选 ${selectedDbs.length} 个库` : '选择数据库'}</span>
               <span className="tiny-btn" onClick={(e) => { e.stopPropagation(); onRefreshSchemas(); }} title="刷新 Schema"><RefreshCw size={13} /></span>
             </button>
-            {selectedDbs.length > 0 && !showDbSelector && (
-              <div className="db-selected-chips">
-                {selectedDbs.slice(0, 3).map((db) => <span key={db}>{db}</span>)}
-                {selectedDbs.length > 3 && <em>+{selectedDbs.length - 3}</em>}
-              </div>
-            )}
             {showDbSelector && (
               <div className="db-multi-dropdown">
                 <div className="db-filter">
@@ -178,6 +181,12 @@ export function Sidebar({
             </div>
           );
         })}
+      </div>
+      <div className="sidebar-footer">
+        <button className={`footer-btn ${view === 'workspace' ? 'active' : ''}`} title="数据库" onClick={() => onNavigate('workspace')}><Database size={15} /></button>
+        <button className={`footer-btn ${view === 'workspace' && !aiCollapsed ? 'active' : ''}`} title="AI 助手" onClick={onToggleAi}><Sparkles size={15} /></button>
+        <button className="footer-btn" title="历史"><History size={15} /></button>
+        <button className={`footer-btn ${view === 'settings' ? 'active' : ''}`} title="设置" onClick={() => onNavigate('settings')}><Settings size={15} /></button>
       </div>
       <div className="resize-handle-col" onMouseDown={(e) => onStartResize('sidebar', sidebarWidth, e)} />
     </aside>

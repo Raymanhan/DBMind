@@ -58,7 +58,7 @@
   max-height: 300px;
   overflow-y: auto;
   margin-top: 6px;
-  background: #242435;
+  background: var(--panel-solid);
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   box-shadow: 0 14px 42px rgba(0, 0, 0, 0.52);
@@ -97,7 +97,7 @@
   text-align: left;
   background: transparent;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
   cursor: pointer;
   gap: 8px;

@@ -21,7 +21,7 @@ const demoConnection: DbConnectionConfig = {
   charset: 'utf8mb4',
   timezone: 'local',
   connectTimeout: 10000,
-  readonly: true,
+  readonly: false,
   ssl: false
 };
 
@@ -33,6 +33,8 @@ const demoSchemas: Record<string, TableSchema[]> = {
       { name: 'id', type: 'bigint', nullable: false, primary: true },
       { name: 'tenant_id', type: 'varchar(64)', nullable: false, primary: false },
       { name: 'status', type: 'varchar(32)', nullable: false, primary: false },
+      { name: 'profile', type: 'json', nullable: true, primary: false },
+      { name: 'memo', type: 'text', nullable: true, primary: false },
       { name: 'updated_at', type: 'datetime', nullable: false, primary: false }
     ] }
   ],
@@ -100,10 +102,13 @@ export const browserFallbackApi: DbmindApi = {
   },
   async runQuery(_connectionId: string, _sql: string, _database?: string): Promise<QueryResult> {
     return {
-      columns: ['count', 'tenant_id', 'updated_at'],
+      columns: ['id', 'count', 'tenant_id', 'profile', 'memo', 'updated_at'],
       rows: Array.from({ length: 10 }, (_, index) => ({
+        id: index + 1,
         count: [128, 96, 74, 63, 51, 47, 38, 29, 21, 15][index],
         tenant_id: `tenant_${String(index + 1).padStart(3, '0')}`,
+        profile: JSON.stringify({ tier: index < 3 ? 'vip' : 'standard', active: true, score: 100 - index }),
+        memo: `这是一段用于验证长文本编辑器的备注内容。第 ${index + 1} 行包含较长文本，避免窄列行内输入时出现挤压或换行。`,
         updated_at: '2024-05-23 16:48:21'
       })),
       rowCount: 10,
@@ -113,8 +118,12 @@ export const browserFallbackApi: DbmindApi = {
   async updateCell() {
     throw browserOnlyError();
   },
-  async updateCellsBatch() {
-    throw browserOnlyError();
+  async updateCellsBatch(input) {
+    return {
+      sqls: input.edits.map((edit) => `UPDATE \`${input.database}\`.\`${input.table}\` SET \`${edit.column}\` = ${edit.value === null ? 'NULL' : '?'} WHERE /* primary key */;`),
+      ok: Boolean(input.execute),
+      affectedRows: input.execute ? input.edits.length : undefined
+    };
   },
   async getTableDesign() {
     throw browserOnlyError();

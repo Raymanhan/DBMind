@@ -19,7 +19,7 @@ export function ConnectionForm({
   return (
     <div className="connection-form">
       <div className="form-row">
-        <input placeholder="连接名" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
+        <span className="field-required"><input placeholder="连接名" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></span>
         <select
           value={draft.driver}
           onChange={(event) =>
@@ -35,7 +35,7 @@ export function ConnectionForm({
         </select>
       </div>
       <div className="form-row">
-        <input placeholder="Host" value={draft.host} onChange={(event) => onChange({ ...draft, host: event.target.value })} />
+        <span className="field-required"><input placeholder="Host" value={draft.host} onChange={(event) => onChange({ ...draft, host: event.target.value })} /></span>
         <input placeholder="Port" value={draft.port} onChange={(event) => onChange({ ...draft, port: Number(event.target.value) })} />
       </div>
       {databases.length > 0 ? (
@@ -49,7 +49,7 @@ export function ConnectionForm({
         <input placeholder="Database" value={draft.database} onChange={(event) => onChange({ ...draft, database: event.target.value })} />
       )}
       <div className="form-row">
-        <input placeholder="User" value={draft.user} onChange={(event) => onChange({ ...draft, user: event.target.value })} />
+        <span className="field-required"><input placeholder="User" value={draft.user} onChange={(event) => onChange({ ...draft, user: event.target.value })} /></span>
         <input type="password" placeholder="Password" value={draft.password} onChange={(event) => onChange({ ...draft, password: event.target.value })} />
       </div>
       <div className="form-row">
@@ -60,6 +60,7 @@ export function ConnectionForm({
         <input type="checkbox" checked={Boolean(draft.readonly)} onChange={(event) => onChange({ ...draft, readonly: event.target.checked })} />
         <span>只读模式</span>
       </label>
+      <p className="form-hint"><span className="required-mark">*</span> 为必填项</p>
       <div className="form-actions">
         <button onClick={onTest} disabled={loading}><KeyRound size={14} /> {loading ? '测试中' : '测试'}</button>
         <button className="primary" onClick={onSave} disabled={loading}><Save size={14} /> {loading ? '保存中' : '保存'}</button>

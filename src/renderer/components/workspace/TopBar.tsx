@@ -1,4 +1,4 @@
-import { Bot, Database, Edit3, Layers3, Play, Server, Table2, Wand2 } from 'lucide-react';
+import { Bot, Database, Edit3, Layers3, Play, Server, Sparkles, Table2 } from 'lucide-react';
 import type { AiProviderConfig, DbConnectionConfig, WorkTab } from '../../../shared/types';
 
 export function TopBar({
@@ -30,29 +30,20 @@ export function TopBar({
 }) {
   return (
     <header className="topbar">
-      <div className="topbar-copy">
-        <h1>{workTab?.title || connection?.name || '未选择连接'}</h1>
-        <div className="topbar-meta">
-          <span><Server size={13} />{connection ? (connection.driver === 'postgres' ? 'PostgreSQL' : 'MySQL') : 'MySQL'}</span>
-          <span><Database size={13} />{selectedDbsCount} 数据库</span>
-          <span><Layers3 size={13} />{tableCount} 对象</span>
-          {dbName && tableName ? (
-            <span><Table2 size={13} />{dbName}.{tableName}</span>
-          ) : defaultProvider ? (
-            <span><Bot size={13} />{defaultProvider.name || defaultProvider.provider} · {defaultProvider.apiMode}</span>
-          ) : (
-            <span><Bot size={13} />Local AI</span>
-          )}
-        </div>
+      <div className="topbar-left">
+        <strong className="topbar-title">{workTab?.title || connection?.name || 'DBMind'}</strong>
+        <span className="topbar-driver"><Server size={11} />{connection ? (connection.driver === 'postgres' ? 'PG' : 'MySQL') : ''}</span>
+        {dbName && tableName && <span className="topbar-table"><Table2 size={11} />{dbName}.{tableName}</span>}
+        {defaultProvider && <span className="topbar-ai"><Sparkles size={11} />{defaultProvider.name}</span>}
       </div>
       <div className="topbar-actions">
         {workTab?.kind === 'table' && dbName && tableName && (
           <button className="ghost" onClick={onDesignTable} disabled={queryLoading || aiLoading}>
-            <Edit3 size={15} /> 表设计
+            <Edit3 size={13} /> 设计
           </button>
         )}
-        <button className="ghost" onClick={onAiGenerate} disabled={aiLoading || queryLoading}><Wand2 size={15} /> {aiLoading ? '生成中' : 'AI 优化'}</button>
-        <button className="run-btn" onClick={onRunQuery} disabled={queryLoading || aiLoading}><Play size={16} /> {queryLoading ? '执行中' : '执行'}</button>
+        <button className="ghost" onClick={onAiGenerate} disabled={aiLoading || queryLoading}><Sparkles size={13} /> {aiLoading ? '生成中' : 'AI'}</button>
+        <button className="run-btn" onClick={onRunQuery} disabled={queryLoading || aiLoading}><Play size={14} /> {queryLoading ? '执行中' : '执行'}</button>
       </div>
     </header>
   );

@@ -7,80 +7,79 @@
 }
 
 .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   flex-shrink: 0;
-  min-height: 88px;
-  padding: 16px 14px 14px;
+  min-height: 36px;
+  padding: 4px 14px;
   background: transparent;
   border-bottom: 0;
 }
-.topbar h1 {
-  margin: 0;
-  color: var(--text);
-  font-size: 22px;
-  font-weight: 780;
-  letter-spacing: 0;
-}
-.topbar-copy {
-  display: grid;
-  min-width: 0;
-  gap: 10px;
-}
-.topbar-meta {
+.topbar-left {
   display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-.topbar-meta span {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  max-width: 260px;
-  height: 24px;
-  padding: 0 10px;
+  gap: 10px;
+  min-width: 0;
   overflow: hidden;
-  color: var(--muted);
+}
+.topbar-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 650;
+  flex-shrink: 1;
 }
-.topbar-meta svg {
+.topbar-driver,
+.topbar-table,
+.topbar-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
   flex-shrink: 0;
-  color: var(--accent);
 }
-.topbar-actions { display: flex; gap: 8px; }
-.topbar-actions button { padding: 0 15px; }
+.topbar-driver { color: var(--accent2); }
+.topbar-table { color: var(--muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+.topbar-ai svg { color: var(--accent); }
+
+.topbar-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.topbar-actions button { padding: 0 10px; height: 26px; font-size: 11px; }
 
 .work-tab-strip {
   display: flex;
   align-items: end;
   gap: 4px;
-  min-height: 44px;
-  padding: 8px 10px 0;
+  min-height: 36px;
+  padding: 6px 8px 0;
   overflow-x: auto;
   overflow-y: hidden;
   background: var(--panel);
   border: 1px solid var(--border);
   border-bottom: 0;
-  border-radius: 10px 10px 0 0;
+  border-radius: 8px 8px 0 0;
   box-shadow: var(--shadow-soft);
 }
 .work-tab {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  max-width: 220px;
-  height: 34px;
-  padding: 0 10px;
+  gap: 5px;
+  max-width: 180px;
+  height: 28px;
+  padding: 0 8px;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--border);
   border-bottom-color: transparent;
-  border-radius: 8px 8px 0 0;
-  font-size: 12px;
+  border-radius: 6px 6px 0 0;
+  font-size: 11px;
 }
 .work-tab.active {
   color: var(--text);
@@ -131,12 +130,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 50px;
-  padding: 8px 12px;
+  min-height: 36px;
+  padding: 4px 12px;
   color: var(--dim);
   background: var(--panel-solid);
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: 11px;
 }
 .editor-context-pill,
 .editor-toolbar-actions,
@@ -146,16 +145,17 @@
   align-items: center;
 }
 .editor-context-pill {
-  gap: 8px;
-  min-width: 190px;
+  gap: 6px;
+  min-width: 160px;
   max-width: 42%;
-  height: 34px;
-  padding: 0 12px;
+  height: 28px;
+  padding: 0 10px;
   overflow: hidden;
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 6px;
+  font-size: 11px;
   font-weight: 650;
 }
 .editor-context-pill span {
@@ -180,13 +180,14 @@
   white-space: nowrap;
 }
 .toolbar-toggle {
-  gap: 7px;
-  height: 30px;
-  padding: 0 11px;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
   color: var(--text);
   background: rgba(91, 77, 255, 0.11);
   border: 1px solid rgba(91, 77, 255, 0.20);
   border-radius: 999px;
+  font-size: 11px;
   font-weight: 700;
 }
 .toolbar-toggle svg {
@@ -213,14 +214,14 @@
 .tabs button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 11px;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
   color: var(--muted);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 7px;
-  font-size: 12px;
+  border-radius: 6px;
+  font-size: 11px;
   font-weight: 650;
 }
 .tabs button.active {

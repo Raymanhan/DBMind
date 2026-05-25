@@ -22,7 +22,7 @@ export function ConnectionModal({
 }) {
   if (!open) return null;
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal-content" onClick={(event) => event.stopPropagation()}>
         <div className="modal-head">
           <h2>{connectionDraft.id ? '编辑连接' : '新建连接'}</h2>

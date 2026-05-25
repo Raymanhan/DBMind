@@ -29,7 +29,7 @@ table {
   font-size: 12px;
 }
 th, td {
-  max-width: 260px;
+  max-width: 280px;
   padding: 9px 14px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -122,11 +122,17 @@ td.cell-edited {
 td.cell-edited:hover {
   background: rgba(45, 212, 191, 0.22);
 }
+td.cell-editing {
+  overflow: visible;
+  padding: 5px 7px;
+  box-shadow: inset 0 0 0 1px rgba(79, 70, 229, 0.36);
+}
 .cell-value-wrap {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 .cell-value-wrap > span {
   min-width: 0;
@@ -154,32 +160,158 @@ td:hover .cell-copy-btn {
   color: var(--muted);
   font-style: italic;
 }
-.cell-editor-wrap {
+.cell-editor-shell {
   display: grid;
-  grid-template-columns: minmax(130px, 1fr) auto;
+  grid-template-columns: minmax(88px, 1fr) auto;
   align-items: center;
-  gap: 6px;
-  min-width: 190px;
+  gap: 8px;
+  width: min(100%, 360px);
+  min-width: 160px;
 }
 .cell-editor {
   width: 100%;
-  height: 30px;
-  padding: 0 8px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: 7px;
   font-family: inherit;
   font-size: 12px;
 }
-.cell-editor-wrap button {
+.cell-editor-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: max-content;
+}
+.cell-editor-actions button,
+.cell-open-popover,
+.cell-editor-readonly button,
+.cell-popover button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   height: 30px;
-  padding: 0 8px;
+  padding: 0 9px;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 7px;
   font-size: 10px;
+  white-space: nowrap;
+}
+.cell-editor-actions button:hover,
+.cell-open-popover:hover,
+.cell-editor-readonly button:hover,
+.cell-popover button:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.cell-editor-actions button.active,
+.cell-popover-actions button.active {
+  color: var(--amber);
+  border-color: rgba(245, 158, 11, 0.48);
+  background: rgba(245, 158, 11, 0.1);
+}
+.cell-open-popover {
+  width: 100%;
+  justify-content: flex-start;
+  min-width: 142px;
+  max-width: 220px;
+  height: 32px;
+  overflow: hidden;
+  color: var(--accent);
+  text-overflow: ellipsis;
+  background: rgba(79, 70, 229, 0.08);
+  border-color: rgba(79, 70, 229, 0.32);
+}
+.cell-editor-readonly {
+  grid-template-columns: minmax(0, 1fr) auto;
+  color: var(--muted);
+}
+.cell-editor-readonly span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cell-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(9, 14, 28, 0.22);
+  backdrop-filter: blur(2px);
+}
+.cell-popover {
+  display: grid;
+  grid-template-rows: auto minmax(220px, 1fr) auto;
+  width: min(680px, calc(100vw - 48px));
+  max-height: min(560px, calc(100vh - 48px));
+  overflow: hidden;
+  color: var(--text);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+}
+.cell-popover-head,
+.cell-popover-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.cell-popover-head > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.cell-popover-head strong {
+  overflow: hidden;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cell-popover-head span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.cell-popover-head button {
+  width: 30px;
+  padding: 0;
+}
+.cell-popover-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  border-bottom: 0;
+}
+.cell-popover-actions button.primary {
+  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.cell-json-monaco {
+  min-height: 280px;
+}
+.cell-long-editor {
+  min-height: 280px;
+  padding: 14px;
+  color: var(--text);
+  background: var(--bg);
+  border: 0;
+  outline: 0;
+  resize: none;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
 }
 .empty-state {
   display: grid;

@@ -342,6 +342,7 @@ function insertionText(completion: Completion) {
 export function SqlEditor({
   value,
   onChange,
+  onRunQuery,
   schemaMap,
   selectedDbs,
   databaseNames,
@@ -349,6 +350,7 @@ export function SqlEditor({
 }: {
   value: string;
   onChange: (value: string) => void;
+  onRunQuery?: () => void;
   schemaMap: Record<string, TableSchema[]>;
   selectedDbs: string[];
   databaseNames?: string[];
@@ -359,6 +361,7 @@ export function SqlEditor({
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const isUpdatingFromProps = useRef(false);
+  const glyphDecos = useRef<string[]>([]);
 
   const completionProvider = useMemo(
     () => ({
@@ -429,6 +432,7 @@ export function SqlEditor({
       fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
       fontSize: 13,
       lineHeight: 23,
+      glyphMargin: true,
       padding: { top: 18, bottom: 18 },
       scrollBeyondLastLine: false,
       renderLineHighlight: 'gutter',
@@ -461,6 +465,46 @@ export function SqlEditor({
       }
     });
 
+    const onRunQueryRef = useRef(onRunQuery);
+    onRunQueryRef.current = onRunQuery;
+
+    const gutterDisposable = editor.onMouseDown((e) => {
+      if (!onRunQueryRef.current) return;
+      const target = e.target;
+      if (
+        target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS ||
+        target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+      ) {
+        onRunQueryRef.current();
+      }
+    });
+
+    const updateGlyphs = () => {
+      if (!onRunQueryRef.current) return;
+      const model = editor.getModel();
+      if (!model) return;
+      const count = model.getLineCount();
+      const decos: monaco.editor.IModelDeltaDecoration[] = [];
+      for (let i = 1; i <= count; i++) {
+        const text = model.getLineContent(i).trim();
+        if (text.length > 0 && !text.startsWith('--')) {
+          decos.push({
+            range: new monaco.Range(i, 1, i, 1),
+            options: {
+              glyphMarginClassName: 'sql-run-glyph',
+              glyphMarginHoverMessage: { value: '执行 SQL' },
+            },
+          });
+        }
+      }
+      glyphDecos.current = editor.deltaDecorations(glyphDecos.current, decos);
+    };
+
+    const modelDisposable = editor.onDidChangeModelContent(() => {
+      updateGlyphs();
+    });
+    updateGlyphs();
+
     const themeTarget = document.querySelector('.app-shell') ?? document.documentElement;
     const themeObserver = new MutationObserver(() => {
       monaco.editor.setTheme(getThemeName());
@@ -469,6 +513,8 @@ export function SqlEditor({
 
     return () => {
       contentDisposable.dispose();
+      gutterDisposable.dispose();
+      modelDisposable.dispose();
       themeObserver.disconnect();
       editor.dispose();
       editorRef.current = null;

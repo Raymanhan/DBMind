@@ -47,11 +47,7 @@ export function useWorkTabs({
   }, [activeWorkTabId]);
 
   const buildTableBaseSql = useCallback((table: TableSchema, dbName?: string) => {
-    const visibleColumns = table.columns.slice(0, 12);
-    const missingPrimaryColumns = table.columns.filter(
-      (c) => c.primary && !visibleColumns.some((v) => v.name === c.name)
-    );
-    const cols = [...visibleColumns, ...missingPrimaryColumns].map((c) => `  ${quoteMysqlIdentifier(c.name)}`).join(',\n') || '  *';
+    const cols = table.columns.map((c) => `  ${quoteMysqlIdentifier(c.name)}`).join(',\n') || '  *';
     return `SELECT\n${cols}\nFROM ${mysqlTableRef(table.name, dbName)}`;
   }, []);
 

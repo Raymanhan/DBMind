@@ -246,7 +246,10 @@ function createWindow(): void {
     minWidth: 1120,
     minHeight: 720,
     title: 'DBMind',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#f7f9fd',
+    icon: path.join(__dirname, '../../build/icon.png'),
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    trafficLightPosition: process.platform === 'darwin' ? { x: 14, y: 18 } : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

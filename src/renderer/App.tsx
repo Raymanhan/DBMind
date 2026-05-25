@@ -1,11 +1,12 @@
-import {useEffect, useMemo, useRef, useState} from 'react';
-import {Braces, Clock3, Copy, Database, Download, Edit3, FileSpreadsheet, Plus, Rows3, Save, Sparkles, Trash2} from 'lucide-react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Braces, Clock3, Database, Download, Edit3, FileSpreadsheet, Plus, Rows3, Save, Sparkles, Trash2} from 'lucide-react';
 import type {AiConversation, AiProviderConfig, ChatMessage, DbConnectionConfig, DbmindApi, WorkTab} from '../shared/types';
 import {AiPanel} from './components/ai/AiPanel';
 import {ConnectionModal} from './components/connection/ConnectionModal';
 import {SqlEditor} from './components/editor/SqlEditor';
 import {SqlConfirmModal} from './components/modals/SqlConfirmModal';
-import {LeftRail} from './components/navigation/LeftRail';
+
+import {EditableCell} from './components/result/EditableCell';
 import {HistoryPanel} from './components/result/HistoryPanel';
 import {Sidebar} from './components/sidebar/Sidebar';
 import {TableDesignerModal} from './components/schema/TableDesigner';
@@ -31,6 +32,7 @@ type BatchCellEdit = {
 };
 
 const api: DbmindApi = window.dbmind ?? browserFallbackApi;
+const isIntegratedMacWindow = Boolean(window.dbmind) && /Mac/.test(navigator.platform);
 
 const seedSql = `SELECT 1 AS connected;`;
 
@@ -110,6 +112,7 @@ function createConsoleTab(): WorkTab {
 
 export function App() {
     const [view, setView] = useState<AppView>('workspace');
+    const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'ai'>('general');
     const [sidebarWidth, setSidebarWidth] = useState(260);
     const [aiPanelWidth, setAiPanelWidth] = useState(300);
     const [aiCollapsed, setAiCollapsed] = useState(() => window.innerWidth < 1360);
@@ -172,8 +175,11 @@ export function App() {
         if (!activeWorkTab?.dbName || !activeWorkTab.tableName) return undefined;
         return schemaMap[activeWorkTab.dbName]?.find((t) => t.name === activeWorkTab.tableName);
     }, [activeWorkTab?.dbName, activeWorkTab?.tableName, schemaMap]);
+    const activeColumnSchemaMap = useMemo(() => {
+        return new Map(activeTableSchema?.columns.map((column) => [column.name, column]) ?? []);
+    }, [activeTableSchema]);
 
-    function getCellEditBlockReason(row: Record<string, unknown>, column: string): string | null {
+    const getCellEditBlockReason = useCallback((row: Record<string, unknown>, column: string): string | null => {
         if (!activeConnection) return '请先选择连接';
         if (activeConnection.driver !== 'mysql') return '当前仅 MySQL 支持编辑数据';
         if (activeConnection.readonly) return '当前连接为只读模式';
@@ -185,7 +191,7 @@ export function App() {
         if (pks.some((c) => !(c.name in row))) return '结果集中缺少主键列，无法安全定位行';
         if (pks.some((c) => c.name === column)) return '主键列暂不支持直接编辑';
         return null;
-    }
+    }, [activeConnection, activeWorkTab, activeTableSchema]);
 
     const {
         activeInlineEditor, setActiveInlineEditor, pendingEdits, setPendingEdits, pendingEditsMap,
@@ -255,7 +261,7 @@ export function App() {
         if (!el) return;
         const rect = el.getBoundingClientRect();
         const startY = e.clientY;
-        const initialH = editorHeightPx ?? Math.round(rect.height * 0.5);
+        const initialH = editorHeightPx ?? Math.round(rect.height * 0.3);
 
         function onMove(ev: MouseEvent) {
             setEditorHeightPx(Math.max(120, Math.min(rect.height - 160, initialH + ev.clientY - startY)));
@@ -327,27 +333,57 @@ export function App() {
         }
     }
 
-    const visibleRows = activeResult?.rows.slice(0, 1000) ?? [];
+    const visibleRows = useMemo(() => activeResult?.rows.slice(0, 1000) ?? [], [activeResult]);
     const isResultTruncated = Boolean(activeResult && activeResult.rows.length > visibleRows.length);
 
+    const resultTableBody = useMemo(() => {
+      if (!activeResult) return null;
+      return visibleRows.map((row, index) => (
+        <tr key={index}>
+          <td className="row-index-cell">{index + 1}</td>
+          {activeResult.columns.map((column) => {
+            const reason = getCellEditBlockReason(row, column);
+            const pendingKey = `${index}:${column}`;
+            const pendingEdit = pendingEditsMap.get(pendingKey);
+            const displayValue = pendingEdit
+              ? (pendingEdit.asNull ? 'NULL' : pendingEdit.newValue)
+              : formatValue(row[column]);
+            return (
+              <EditableCell
+                key={column}
+                rowIndex={index}
+                column={column}
+                value={row[column]}
+                reason={reason}
+                columnSchema={activeColumnSchemaMap.get(column)}
+                pendingEdit={pendingEdit}
+                editorState={activeInlineEditor}
+                displayValue={displayValue}
+                isNullDisplay={Boolean(pendingEdit?.asNull)}
+                onBeginEdit={() => beginCellEdit(index, row, column)}
+                onEditorChange={setActiveInlineEditor}
+                onCommit={finishCellEdit}
+                onCancel={() => setActiveInlineEditor(null)}
+                onCopy={() => copyText(row[column], '单元格')}
+              />
+            );
+          })}
+        </tr>
+      ));
+    }, [visibleRows, activeResult, pendingEditsMap, activeColumnSchemaMap, activeInlineEditor, getCellEditBlockReason, beginCellEdit, setActiveInlineEditor, finishCellEdit, copyText, formatValue]);
+
     return (
-        <div className={`app-shell theme-${settings.theme ?? 'dark'}`}
-             style={{gridTemplateColumns: `72px ${sidebarWidth}px ${aiCollapsed ? 'minmax(720px, 1fr)' : 'minmax(640px, 1fr)'} ${aiCollapsed ? 56 : aiPanelWidth}px`}}>
-            <LeftRail
-                view={view}
-                aiCollapsed={aiCollapsed}
-                onNavigate={setView}
-                onToggleAi={() => {
-                    setView('workspace');
-                    setAiCollapsed((value) => !value);
-                }}
-            />
+        <div className={`app-shell theme-${settings.theme ?? 'dark'} ${isIntegratedMacWindow ? 'window-integrated' : ''}`}
+             style={{gridTemplateColumns: `${sidebarWidth}px ${aiCollapsed ? 'minmax(720px, 1fr)' : 'minmax(640px, 1fr)'} ${aiCollapsed ? 56 : aiPanelWidth}px`}}>
 
             {view === 'settings' ? (
                 <SettingsView
+                    key={`settings-${settingsInitialTab}`}
+                    initialTab={settingsInitialTab}
                     aiDraft={aiDraft}
                     settings={settings}
                     notice={notice}
+                    sidebarWidth={sidebarWidth}
                     onChange={setAiDraft}
                     onSave={saveAiProvider}
                     onTest={testAiProvider}
@@ -355,6 +391,7 @@ export function App() {
                     onEdit={setAiDraft}
                     onDelete={deleteAiProvider}
                     onThemeChange={saveTheme}
+                    onBack={() => { setView('workspace'); setSettingsInitialTab('general'); }}
                     loading={loading.settings}
                 />
             ) : (
@@ -393,6 +430,13 @@ export function App() {
                         onSelectTable={setSelectedTable}
                         onOpenTableTab={openTableTab}
                         onStartResize={startSideResize}
+                        view={view}
+                        aiCollapsed={aiCollapsed}
+                        onNavigate={(v) => setView(v as AppView)}
+                        onToggleAi={() => {
+                            setView('workspace');
+                            setAiCollapsed((v) => !v);
+                        }}
                     />
 
                     <main className="workspace" ref={workspaceRef}>
@@ -425,16 +469,9 @@ export function App() {
                         />
 
                         <section className="editor-zone"
-                                 style={editorHeightPx ? {flex: `0 0 ${editorHeightPx}px`} : {flex: '1 1 50%'}}>
+                                 style={editorHeightPx ? {flex: `0 0 ${editorHeightPx}px`} : {flex: '1 1 30%'}}>
                             <div className="editor-toolbar">
-                                <div className="editor-context-pill">
-                                    <Database size={14}/>
-                                    <span>{activeWorkTab?.kind === 'table' && activeWorkTab.dbName ? `${activeWorkTab.dbName}.${activeWorkTab.tableName}` : activeConnection?.name ?? 'SQL Console'}</span>
-                                </div>
-                                <div className="editor-toolbar-actions">
-                                    <span className="toolbar-status">{notice || 'Ready'}</span>
-                                    <span className="toolbar-toggle"><Sparkles size={14}/> 智能补全</span>
-                                </div>
+                                <span className="toolbar-status">{notice || 'Ready'}</span>
                             </div>
                             <SqlEditor
                                 value={activeSql}
@@ -443,6 +480,7 @@ export function App() {
                                     sql: newValue,
                                     sort: undefined
                                 })}
+                                onRunQuery={() => runQuery()}
                                 schemaMap={schemaMap}
                                 selectedDbs={selectedDbs}
                                 databaseNames={availableDatabaseNames}
@@ -452,7 +490,7 @@ export function App() {
 
                         <div className="resize-handle-row" onMouseDown={startVerticalResize}/>
 
-                        <section className="result-zone" style={{flex: '1 1 50%', minHeight: 0}}>
+                        <section className="result-zone" style={{flex: '1 1 70%', minHeight: 0}}>
                             <div className="tabs">
                                 <button className={activeResultTab === 'results' ? 'active' : ''}
                                         onClick={() => updateActiveWorkTab({resultTab: 'results'})}><Rows3 size={14}/> 结果集
@@ -533,90 +571,7 @@ export function App() {
                                             ))}
                                         </tr>
                                         </thead>
-                                        <tbody>
-                                        {visibleRows.map((row, index) => (
-                                            <tr key={index}>
-                                                <td className="row-index-cell">{index + 1}</td>
-                                                {activeResult.columns.map((column) => {
-                                                    const reason = getCellEditBlockReason(row, column);
-                                                    const isInlineEditing = activeInlineEditor?.rowIndex === index && activeInlineEditor.column === column;
-                                                    const pendingKey = `${index}:${column}`;
-                                                    const pendingEdit = pendingEditsMap.get(pendingKey);
-                                                    const tdClass = [
-                                                        reason ? 'cell-readonly' : 'cell-editable',
-                                                        pendingEdit ? 'cell-edited' : ''
-                                                    ].filter(Boolean).join(' ');
-                                                    const displayValue = pendingEdit
-                                                        ? (pendingEdit.asNull ? 'NULL' : pendingEdit.newValue)
-                                                        : formatValue(row[column]);
-                                                    const isNullDisplay = pendingEdit?.asNull;
-                                                    return (
-                                                        <td
-                                                            key={column}
-                                                            className={tdClass}
-                                                            title={reason ?? (pendingEdit ? '已修改，双击重新编辑' : '双击编辑')}
-                                                            onDoubleClick={() => beginCellEdit(index, row, column)}
-                                                        >
-                                                            {isInlineEditing ? (
-                                                                <div className="cell-editor-wrap">
-                                                                    <input
-                                                                        className="cell-editor"
-                                                                        autoFocus
-                                                                        value={activeInlineEditor!.value}
-                                                                        placeholder={activeInlineEditor!.asNull ? 'NULL' : ''}
-                                                                        onChange={(event) => setActiveInlineEditor({
-                                                                            ...activeInlineEditor!,
-                                                                            value: event.target.value,
-                                                                            asNull: false
-                                                                        })}
-                                                                        onBlur={() => finishCellEdit(activeInlineEditor!)}
-                                                                        onKeyDown={(event) => {
-                                                                            if (event.key === 'Enter') {
-                                                                                event.preventDefault();
-                                                                                event.currentTarget.blur();
-                                                                            }
-                                                                            if (event.key === 'Escape') {
-                                                                                event.preventDefault();
-                                                                                setActiveInlineEditor(null);
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                    <button
-                                                                        type="button"
-                                                                        onMouseDown={(event) => event.preventDefault()}
-                                                                        onClick={() => finishCellEdit({
-                                                                            ...activeInlineEditor!,
-                                                                            value: '',
-                                                                            asNull: true
-                                                                        })}
-                                                                        title="保存为 NULL"
-                                                                    >
-                                                                        NULL
-                                                                    </button>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="cell-value-wrap">
-                                                                    <span
-                                                                        className={isNullDisplay ? 'cell-edited-null' : ''}>{displayValue}</span>
-                                                                    <button
-                                                                        className="cell-copy-btn"
-                                                                        type="button"
-                                                                        onClick={(event) => {
-                                                                            event.stopPropagation();
-                                                                            copyText(row[column], '单元格');
-                                                                        }}
-                                                                        title="复制单元格"
-                                                                    >
-                                                                        <Copy size={11}/>
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        ))}
-                                        </tbody>
+                                        <tbody>{resultTableBody}</tbody>
                                     </table>
                                 ) : (
                                     <div className="empty-state workspace-empty">
@@ -673,6 +628,10 @@ export function App() {
                         onSwitchConversation={switchConversation}
                         onDeleteConversation={deleteConversation}
                         onClearAllConversations={clearAllConversations}
+                        onNavigateToSettings={() => {
+                            setSettingsInitialTab('ai');
+                            setView('settings');
+                        }}
                     />
                 </>
             )}

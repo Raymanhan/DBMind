@@ -94,7 +94,8 @@
   background: #f8fafc;
 }
 
-.theme-light .mention-dropdown {
+.theme-light .mention-dropdown,
+.theme-light .conv-dropdown {
   background: #ffffff;
   border-color: rgba(79, 70, 229, 0.24);
   box-shadow: 0 14px 38px rgba(25, 35, 60, 0.18);
@@ -107,7 +108,9 @@
 }
 
 .theme-light .mention-item:hover,
-.theme-light .mention-item.active {
+.theme-light .mention-item.active,
+.theme-light .conv-item:hover,
+.theme-light .conv-item.active {
   background: rgba(79, 70, 229, 0.11);
 }
 

@@ -13,3 +13,29 @@
 .sql-editor-wrap .monaco-editor .suggest-widget .monaco-list-row {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
+
+.sql-editor-wrap .monaco-editor .margin-view-overlays .line-numbers {
+  cursor: pointer;
+}
+.sql-editor-wrap .monaco-editor .margin-view-overlays .line-numbers:hover {
+  color: var(--accent);
+}
+
+.sql-run-glyph {
+  width: 16px !important;
+  margin-left: 4px;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.12s;
+}
+.sql-run-glyph::before {
+  content: '▶';
+  font-size: 8px;
+  color: var(--accent2);
+}
+.sql-run-glyph:hover {
+  opacity: 1;
+}
+.sql-editor-wrap .monaco-editor .margin-view-overlays .glyph-margin {
+  cursor: pointer;
+}

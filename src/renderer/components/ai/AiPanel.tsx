@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Bot, ChevronDown, Edit3, Plus, Sparkles, Table2, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Bot, Check, ChevronDown, Copy, Settings, Sparkles } from 'lucide-react';
 import type { AiConversation, ChatMessage, TableSchema } from '../../../shared/types';
 import { ConversationSwitcher } from './ConversationSwitcher';
 
@@ -32,7 +32,8 @@ export function AiPanel({
   onCreateConversation,
   onSwitchConversation,
   onDeleteConversation,
-  onClearAllConversations
+  onClearAllConversations,
+  onNavigateToSettings
 }: {
   selectedSchema?: TableSchema;
   chat: ChatMessage[];
@@ -63,8 +64,18 @@ export function AiPanel({
   onSwitchConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onClearAllConversations: () => void;
+  onNavigateToSettings: () => void;
 }) {
   const mentionListRef = useRef<HTMLDivElement>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  const copySql = useCallback(async (index: number, sql: string) => {
+    try {
+      await navigator.clipboard.writeText(sql);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 1500);
+    } catch { /* clipboard unavailable */ }
+  }, []);
 
   useEffect(() => {
     if (!mentionQuery || mentionOptions.length === 0) return;
@@ -105,30 +116,9 @@ export function AiPanel({
       </div>
 
       <div className="schema-card">
-        <div className="section-label">当前表结构</div>
+        <div className="section-label">当前表</div>
         <h2>{selectedSchema?.name ?? '未选择表'}</h2>
-        {selectedSchema && (
-          <div className="table-meta">
-            <span>{selectedSchema.type ?? 'table'}</span>
-            {selectedSchema.engine && <span>{selectedSchema.engine}</span>}
-            {selectedSchema.rowCount !== undefined && <span>~{selectedSchema.rowCount} rows</span>}
-          </div>
-        )}
-        <div className="columns">
-          {selectedSchema?.columns.map((column) => (
-            <div className="column-row" key={column.name}>
-              <span>{column.name}{column.primary ? ' · PK' : ''}{column.references ? ` · FK ${column.references}` : ''}</span>
-              <em>{column.type}</em>
-            </div>
-          ))}
-        </div>
-        <div className="table-actions">
-          <button onClick={onBrowseTable} disabled={!selectedSchema} title="浏览表数据"><Table2 size={13} /> 浏览</button>
-          <button onClick={onDesignTable} disabled={!selectedSchema} title="打开表设计器"><Edit3 size={13} /> 设计</button>
-          <button onClick={onSelectTemplate} disabled={!selectedSchema} title="生成 SELECT">SELECT</button>
-          <button onClick={onCountTemplate} disabled={!selectedSchema} title="生成 COUNT">COUNT</button>
-          <button onClick={onLoadDdl} disabled={!selectedSchema} title="读取 DDL">DDL</button>
-        </div>
+        {selectedSchema?.comment && <p className="table-comment">{selectedSchema.comment}</p>}
       </div>
 
       <div className="chat-list">
@@ -136,7 +126,17 @@ export function AiPanel({
           <div className={`chat-message ${message.role}`} key={index}>
             {message.meta && <div className="meta">{message.meta}</div>}
             <p>{message.content}</p>
-            {message.sql && <pre>{message.sql}</pre>}
+            {message.sql && (
+              <div className="sql-block">
+                <div className="sql-block-header">
+                  <span>SQL</span>
+                  <button className="sql-copy-btn" onClick={() => copySql(index, message.sql!)}>
+                    {copiedIndex === index ? <><Check size={12} /> 已复制</> : <><Copy size={12} /> 复制</>}
+                  </button>
+                </div>
+                <pre>{message.sql}</pre>
+              </div>
+            )}
             {message.warnings?.map((warning) => <div className="warning" key={warning}>{warning}</div>)}
           </div>
         ))}
@@ -176,8 +176,8 @@ export function AiPanel({
         </div>
         <div className="composer-footer">
           <span>{mentionedTables.length ? `已引用 ${mentionedTables.join(', ')}` : '输入 @ 引用表'}</span>
-          <button onClick={onGenerate} disabled={busy}><Sparkles size={15} /> {aiLoading ? '生成中' : '生成 SQL'}</button>
-          <button className="text-danger" onClick={onCreateConversation} title="新建对话"><Plus size={14} /></button>
+          <button className="ai-settings-btn" onClick={onNavigateToSettings} title="AI 设置"><Settings size={14} /></button>
+          <button className="ai-generate-btn" onClick={onGenerate} disabled={busy}><Sparkles size={15} /> {aiLoading ? '生成中' : '生成 SQL'}</button>
         </div>
       </div>
       </div>
