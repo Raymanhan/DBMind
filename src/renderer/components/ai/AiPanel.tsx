@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { Bot, Check, ChevronDown, Copy, Settings, Sparkles } from 'lucide-react';
 import type { AiConversation, ChatMessage, TableSchema } from '../../../shared/types';
 import { ConversationSwitcher } from './ConversationSwitcher';
 
-export function AiPanel({
+export const AiPanel = memo(function AiPanel({
   selectedSchema,
   chat,
   aiInput,
@@ -183,4 +183,4 @@ export function AiPanel({
       </div>
     </aside>
   );
-}
+});

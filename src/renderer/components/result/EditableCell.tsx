@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {memo, useEffect, useMemo, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Check, Copy, Maximize2, X} from 'lucide-react';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
@@ -191,7 +191,7 @@ function FloatingCellEditor({
   );
 }
 
-export function EditableCell({
+export const EditableCell = memo(function EditableCell({
   rowIndex,
   column,
   value,
@@ -315,4 +315,4 @@ export function EditableCell({
       )}
     </td>
   );
-}
+});

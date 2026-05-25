@@ -45,9 +45,13 @@ export function useAiAssistant({
   mysqlTableRef: (table: string, db?: string) => string;
 }) {
   const [aiInput, setAiInput] = useState('');
+  const aiInputRef = useRef(aiInput);
+  aiInputRef.current = aiInput;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [mentionQuery, setMentionQuery] = useState<{ db: string; table: string; start: number } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionOptionsRef = useRef<{ db: string; table: TableSchema }[]>([]);
+  const mentionIndexRef = useRef(0);
 
   const [conversations, setConversations] = useState<AiConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState('');
@@ -79,6 +83,8 @@ export function useAiAssistant({
     }
     return result;
   }, [mentionQuery, schemaMap]);
+  mentionOptionsRef.current = mentionOptions;
+  mentionIndexRef.current = mentionIndex;
 
   useEffect(() => {
     api.listAiConversations().then((saved) => {
@@ -127,24 +133,28 @@ export function useAiAssistant({
 
   const selectMention = useCallback((db: string, tableName: string) => {
     if (!mentionQuery) return;
-    const before = aiInput.slice(0, mentionQuery.start);
+    const input = aiInputRef.current;
+    const before = input.slice(0, mentionQuery.start);
     const typedLen = 1 + (mentionQuery.db ? mentionQuery.db.length + 1 + mentionQuery.table.length : mentionQuery.table.length);
-    const after = aiInput.slice(mentionQuery.start + typedLen);
+    const after = input.slice(mentionQuery.start + typedLen);
     setAiInput(before + `@${db}.${tableName} ` + after);
     setMentionQuery(null);
     textareaRef.current?.focus();
-  }, [mentionQuery, aiInput]);
+  }, [mentionQuery]);
 
   const handleAiKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (!mentionQuery || mentionOptions.length === 0) return;
+    if (!mentionQuery) return;
+    const opts = mentionOptionsRef.current;
+    const idx = mentionIndexRef.current;
+    if (opts.length === 0) return;
     if (event.key === 'Escape') { setMentionQuery(null); event.preventDefault(); return; }
-    if (event.key === 'ArrowDown') { setMentionIndex((prev) => Math.min(prev + 1, mentionOptions.length - 1)); event.preventDefault(); return; }
+    if (event.key === 'ArrowDown') { setMentionIndex((prev) => Math.min(prev + 1, opts.length - 1)); event.preventDefault(); return; }
     if (event.key === 'ArrowUp') { setMentionIndex((prev) => Math.max(prev - 1, 0)); event.preventDefault(); return; }
     if (event.key === 'Enter') {
-      const selected = mentionOptions[mentionIndex];
+      const selected = opts[idx];
       if (selected) { selectMention(selected.db, selected.table.name); event.preventDefault(); }
     }
-  }, [mentionQuery, mentionOptions, mentionIndex, selectMention]);
+  }, [mentionQuery, selectMention]);
 
   const createConversation = useCallback(() => {
     const id = crypto.randomUUID();
@@ -166,15 +176,12 @@ export function useAiAssistant({
         setActiveConversationId(newId);
         return [makeConversation(newId)];
       }
+      if (id === activeConvIdRef.current) {
+        setActiveConversationId(next[0]?.id ?? '');
+      }
       return next;
     });
-    if (id === activeConversationId) {
-      setConversations((prev) => {
-        if (prev.length > 0) setActiveConversationId(prev[0].id);
-        return prev;
-      });
-    }
-  }, [activeConversationId, api]);
+  }, [api]);
 
   const clearAllConversations = useCallback(() => {
     api.clearAiConversations();
@@ -186,7 +193,8 @@ export function useAiAssistant({
 
   const generateSql = useCallback(async () => {
     setLoadingFlag('ai', true);
-    const names = extractTableMentions(aiInput);
+    const currentInput = aiInputRef.current;
+    const names = extractTableMentions(currentInput);
     const tables: TableSchema[] = [];
     for (const name of names) {
       if (name.includes('.')) {
@@ -199,10 +207,10 @@ export function useAiAssistant({
       }
     }
     const context = tables.length ? tables : selectedSchema ? [selectedSchema] : [];
-    const request = { prompt: aiInput, dialect: (activeConnection?.driver as 'mysql' | 'postgres') ?? 'mysql', tables: context };
+    const request = { prompt: currentInput, dialect: (activeConnection?.driver as 'mysql' | 'postgres') ?? 'mysql', tables: context };
 
     const currentConvId = activeConvIdRef.current;
-    const userMsg: ChatMessage = { role: 'user', content: aiInput };
+    const userMsg: ChatMessage = { role: 'user', content: currentInput };
 
     setConversations((prev) =>
       prev.map((c) => {
@@ -210,107 +218,34 @@ export function useAiAssistant({
         const needsTitle = c.title === '新对话' && c.messages.filter((m) => m.role !== 'assistant' || m.content).length <= 1;
         return {
           ...c,
-          title: needsTitle ? titleFromMessage(aiInput) : c.title,
+          title: needsTitle ? titleFromMessage(currentInput) : c.title,
           messages: [...c.messages, userMsg],
           updatedAt: new Date().toISOString()
         };
       })
     );
 
-    const useStream = defaultProvider?.streaming === true && api.generateSqlStream;
-    if (!useStream) {
-      try {
-        const response: AiGenerateResponse = await api.generateSql(request);
-        const assistantMsg: ChatMessage = {
-          role: 'assistant', content: response.explanation, sql: response.sql, warnings: response.warnings,
-          meta: `${response.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${response.usedTables.join(', ') || selectedTable}`
-        };
-        setConversations((prev) =>
-          prev.map((c) => c.id === currentConvId
-            ? { ...c, messages: [...c.messages, assistantMsg], updatedAt: new Date().toISOString() }
-            : c)
-        );
-        updateActiveWorkTab({ baseSql: response.sql, sql: response.sql, sort: undefined });
-      } catch (error) {
-        setConversations((prev) =>
-          prev.map((c) => c.id === currentConvId
-            ? { ...c, messages: [...c.messages, { role: 'assistant', content: error instanceof Error ? error.message : 'AI 生成失败', meta: 'AI 错误' }], updatedAt: new Date().toISOString() }
-            : c)
-        );
-      } finally { setLoadingFlag('ai', false); }
-      return;
-    }
-
-    // Streaming mode
-    const convBefore = conversationsRef.current.find((c) => c.id === currentConvId);
-    const msgIndex = (convBefore?.messages.length ?? 0);
-
-    const initialMeta = `${defaultProvider?.name ?? 'AI'} · 生成中...`;
-    setConversations((prev) =>
-      prev.map((c) => c.id === currentConvId
-        ? { ...c, messages: [...c.messages, { role: 'assistant', content: '', meta: initialMeta }], updatedAt: new Date().toISOString() }
-        : c)
-    );
-
-    let streamedContent = '';
-
     try {
-      await api.generateSqlStream(request, (chunk) => {
-        if (chunk.error) {
-          setConversations((prev) =>
-            prev.map((c) => {
-              if (c.id !== currentConvId) return c;
-              const msgs = [...c.messages];
-              msgs[msgIndex] = { role: 'assistant' as const, content: chunk.error!, meta: 'AI 错误' };
-              return { ...c, messages: msgs };
-            })
-          );
-          setLoadingFlag('ai', false);
-          return;
-        }
-        if (chunk.token) {
-          streamedContent += chunk.token;
-          setConversations((prev) =>
-            prev.map((c) => {
-              if (c.id !== currentConvId) return c;
-              const msgs = [...c.messages];
-              msgs[msgIndex] = { ...msgs[msgIndex] as ChatMessage, content: streamedContent };
-              return { ...c, messages: msgs };
-            })
-          );
-        }
-        if (chunk.done && chunk.sql) {
-          updateActiveWorkTab({ baseSql: chunk.sql, sql: chunk.sql, sort: undefined });
-          setConversations((prev) =>
-            prev.map((c) => {
-              if (c.id !== currentConvId) return c;
-              const msgs = [...c.messages];
-              msgs[msgIndex] = {
-                role: 'assistant',
-                content: chunk.explanation || streamedContent,
-                sql: chunk.sql,
-                warnings: chunk.warnings,
-                meta: `${chunk.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${(chunk.usedTables || []).join(', ') || selectedTable}`
-              };
-              return { ...c, messages: msgs, updatedAt: new Date().toISOString() };
-            })
-          );
-          setLoadingFlag('ai', false);
-        }
-      });
+      const response: AiGenerateResponse = await api.generateSql(request);
+      const assistantMsg: ChatMessage = {
+        role: 'assistant', content: response.explanation, sql: response.sql, warnings: response.warnings,
+        meta: `${response.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${response.usedTables.join(', ') || selectedTable}`
+      };
+      setConversations((prev) =>
+        prev.map((c) => c.id === currentConvId
+          ? { ...c, messages: [...c.messages, assistantMsg], updatedAt: new Date().toISOString() }
+          : c)
+      );
+      updateActiveWorkTab({ baseSql: response.sql, sql: response.sql, sort: undefined });
+      setAiInput('');
     } catch (error) {
       setConversations((prev) =>
-        prev.map((c) => {
-          if (c.id !== currentConvId) return c;
-          const msgs = [...c.messages];
-          msgs[msgIndex] = { role: 'assistant' as const, content: error instanceof Error ? error.message : 'AI 生成失败', meta: 'AI 错误' };
-          return { ...c, messages: msgs, updatedAt: new Date().toISOString() };
-        })
+        prev.map((c) => c.id === currentConvId
+          ? { ...c, messages: [...c.messages, { role: 'assistant', content: error instanceof Error ? error.message : 'AI 生成失败', meta: 'AI 错误' }], updatedAt: new Date().toISOString() }
+          : c)
       );
-    } finally {
-      setLoadingFlag('ai', false);
-    }
-  }, [aiInput, schemaMap, allTables, selectedSchema, api, activeConnection, updateActiveWorkTab, defaultProvider, setLoadingFlag, selectedTable]);
+    } finally { setLoadingFlag('ai', false); }
+  }, [schemaMap, allTables, selectedSchema, api, activeConnection, updateActiveWorkTab, defaultProvider, setLoadingFlag, selectedTable]);
 
   const insertTableSelect = useCallback((limit = 100) => {
     if (!selectedSchema) { setNotice('请先选择一张表。'); return; }

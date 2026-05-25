@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ChevronDown, Circle, Database, Edit3, History, Plus, RefreshCw, Search, Settings, Sparkles, Table2, Trash2 } from 'lucide-react';
 import type { DatabaseInfo, DbConnectionConfig, TableSchema } from '../../../shared/types';
 
@@ -5,7 +6,7 @@ function tableKey(db: string, table: string): string {
   return `${db}.${table}`;
 }
 
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   activeConnection,
   activeConnectionId,
   connections,
@@ -191,4 +192,4 @@ export function Sidebar({
       <div className="resize-handle-col" onMouseDown={(e) => onStartResize('sidebar', sidebarWidth, e)} />
     </aside>
   );
-}
+});

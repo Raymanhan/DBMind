@@ -35,6 +35,7 @@ const api: DbmindApi = window.dbmind ?? browserFallbackApi;
 const isIntegratedMacWindow = Boolean(window.dbmind) && /Mac/.test(navigator.platform);
 
 const seedSql = `SELECT 1 AS connected;`;
+const RESULT_ZONE_STYLE = {flex: '1 1 70%', minHeight: 0} as const;
 
 const emptyConnection: DbConnectionConfig = {
     id: '',
@@ -122,9 +123,13 @@ export function App() {
     const busy = loading.query || loading.ai || loading.connection || loading.settings;
     const [tableDesignerTarget, setTableDesignerTarget] = useState<{ database: string; table: string } | null>(null);
 
-    function setLoadingFlag(key: keyof typeof loading, value: boolean) {
+    const setLoadingFlag = useCallback((key: keyof typeof loading, value: boolean) => {
         setLoading((current) => ({...current, [key]: value}));
-    }
+    }, []);
+    const setQueryLoading = useCallback((k: string, v: boolean) => setLoadingFlag(k as 'query', v), [setLoadingFlag]);
+    const setAiLoading = useCallback((k: string, v: boolean) => setLoadingFlag(k as 'ai', v), [setLoadingFlag]);
+    const setConnectionLoading = useCallback((k: string, v: boolean) => setLoadingFlag(k as 'connection', v), [setLoadingFlag]);
+    const setSettingsLoading = useCallback((k: string, v: boolean) => setLoadingFlag(k as 'settings', v), [setLoadingFlag]);
 
     const {
         connections, setConnections, activeConnectionId, setActiveConnectionId,
@@ -136,13 +141,13 @@ export function App() {
         emptyConnection,
         driverLabel,
         setNotice,
-        setLoadingFlag: (k, v) => setLoadingFlag(k as 'connection', v)
+        setLoadingFlag: setConnectionLoading
     });
 
     const {
         settings, setSettings, settingsLoaded, setSettingsLoaded,
         aiDraft, setAiDraft, saveAiProvider, testAiProvider, setDefaultProvider, deleteAiProvider, saveTheme
-    } = useSettings({api, emptyAiProvider, setNotice, setLoadingFlag: (k, v) => setLoadingFlag(k as 'settings', v)});
+    } = useSettings({api, emptyAiProvider, setNotice, setLoadingFlag: setSettingsLoading});
 
     const activeConnection = connections.find((c) => c.id === activeConnectionId) ?? connections[0];
 
@@ -162,7 +167,7 @@ export function App() {
         activeConnectionId,
         selectedDbs,
         setNotice,
-        setLoadingFlag: (k, v) => setLoadingFlag(k as 'query', v)
+        setLoadingFlag: setQueryLoading
     });
 
     const activeWorkTab = workTabs.find((t) => t.id === activeWorkTabId) ?? workTabs[0];
@@ -200,7 +205,7 @@ export function App() {
     } = useBatchEdit({
         api, activeConnectionId, activeResult,
         dbName: activeWorkTab?.dbName, tableName: activeWorkTab?.tableName, tableSchema: activeTableSchema,
-        setLoadingFlag: (k, v) => setLoadingFlag(k as 'query', v), setNotice,
+        setLoadingFlag: setQueryLoading, setNotice,
         onRefreshResult: () => runWorkTabQuery(activeWorkTabId), getCellEditBlockReason
     });
 
@@ -219,21 +224,54 @@ export function App() {
     } = useAiAssistant({
         api, allTables, schemaMap, selectedSchema, selectedSchemaDb, selectedTable: selectedTable,
         activeConnection, activeConnectionId, defaultProvider,
-        setLoadingFlag: (k, v) => setLoadingFlag(k as 'ai', v), setNotice, updateActiveWorkTab, mysqlTableRef
+        setLoadingFlag: setAiLoading, setNotice, updateActiveWorkTab, mysqlTableRef
     });
 
-    const runQuery = () => {
+    const handleSqlChange = useCallback((newValue: string) => {
+        updateActiveWorkTab({ baseSql: newValue, sql: newValue, sort: undefined });
+    }, [updateActiveWorkTab]);
+    const runQuery = useCallback((sqlOverride?: string) => {
         setPendingEdits([]);
         setActiveInlineEditor(null);
-        return runWorkTabQuery();
-    };
-    const browseTable = () => {
+        return runWorkTabQuery(activeWorkTabId, sqlOverride);
+    }, [runWorkTabQuery, activeWorkTabId]);
+
+    // Stable callbacks for Sidebar / AiPanel / modals
+    const toggleDbSelector = useCallback(() => setShowDbSelector((v) => !v), []);
+    const clearSearch = useCallback(() => setSearchQuery(''), []);
+    const clearSelection = useCallback(() => {
+        setSelectedDbs([]);
+        if (activeConnectionId) saveSelectedDbs(activeConnectionId, []).catch(() => setNotice('数据库选择保存失败'));
+    }, [activeConnectionId, saveSelectedDbs, setNotice]);
+    const navigateTo = useCallback((v: string) => setView(v as AppView), []);
+    const toggleAiCollapsed = useCallback(() => { setView('workspace'); setAiCollapsed((v) => !v); }, []);
+    const toggleAiPanelCollapsed = useCallback(() => setAiCollapsed((v) => !v), []);
+    const selectTableTemplate = useCallback(() => insertTableSelect(100), [insertTableSelect]);
+    const designSelectedTable = useCallback(() => {
+        if (!selectedSchema) return;
+        setTableDesignerTarget({
+            database: selectedSchemaDb ?? selectedDbs[0] ?? activeConnection?.database ?? '',
+            table: selectedSchema.name
+        });
+    }, [selectedSchema, selectedSchemaDb, selectedDbs, activeConnection]);
+    const designActiveTable = useCallback(() => {
+        if (activeWorkTab?.dbName && activeWorkTab.tableName) {
+            setTableDesignerTarget({ database: activeWorkTab.dbName, table: activeWorkTab.tableName });
+        }
+    }, [activeWorkTab?.dbName, activeWorkTab?.tableName]);
+    const navigateToAiSettings = useCallback(() => {
+        setSettingsInitialTab('ai');
+        setView('settings');
+    }, []);
+    const closeConnectionModal = useCallback(() => setShowConnectionModal(false), []);
+    const closeTableDesigner = useCallback(() => setTableDesignerTarget(null), []);
+    const browseTable = useCallback(() => {
         if (!selectedSchema) {
             setNotice('请先选择一张表。');
             return;
         }
         openTableTab(selectedSchemaDb ?? selectedDbs[0] ?? activeConnection?.database ?? '', selectedSchema);
-    };
+    }, [selectedSchema, selectedSchemaDb, selectedDbs, activeConnection, openTableTab, setNotice]);
 
     const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -283,7 +321,7 @@ export function App() {
                 FROM (${stripTrailingSemicolon(tab.baseSql || tab.sql)}) q${orderClause} LIMIT 100;`;
     }
 
-    function setColumnSort(column: string) {
+    const setColumnSort = useCallback((column: string) => {
         if (!activeWorkTab) return;
         const current = activeWorkTab.sort;
         const nextSort = current?.column === column && current.direction === 'asc' ? {
@@ -299,9 +337,9 @@ export function App() {
         setPendingEdits([]);
         setActiveInlineEditor(null);
         runWorkTabQuery(activeWorkTabId, composeSortedSql(activeWorkTab, nextSort));
-    }
+    }, [activeWorkTab, updateActiveWorkTab, setNotice, runWorkTabQuery, activeWorkTabId]);
 
-    function exportResult(format: 'csv' | 'json') {
+    const exportResult = useCallback((format: 'csv' | 'json') => {
         if (!activeResult) {
             setNotice('没有可导出的结果集。');
             return;
@@ -321,9 +359,9 @@ export function App() {
         a.click();
         URL.revokeObjectURL(url);
         setNotice(`已导出 ${filename}`);
-    }
+    }, [activeResult, setNotice]);
 
-    async function copyText(value: unknown, label = '内容') {
+    const copyText = useCallback(async (value: unknown, label = '内容') => {
         const text = value === null || value === undefined ? '' : String(value);
         try {
             await navigator.clipboard.writeText(text);
@@ -331,7 +369,7 @@ export function App() {
         } catch {
             setNotice('复制失败');
         }
-    }
+    }, [setNotice]);
 
     const visibleRows = useMemo(() => activeResult?.rows.slice(0, 1000) ?? [], [activeResult]);
     const isResultTruncated = Boolean(activeResult && activeResult.rows.length > visibleRows.length);
@@ -372,9 +410,16 @@ export function App() {
       ));
     }, [visibleRows, activeResult, pendingEditsMap, activeColumnSchemaMap, activeInlineEditor, getCellEditBlockReason, beginCellEdit, setActiveInlineEditor, finishCellEdit, copyText, formatValue]);
 
+    const gridStyle = useMemo(() => ({
+      gridTemplateColumns: `${sidebarWidth}px ${aiCollapsed ? 'minmax(720px, 1fr)' : 'minmax(640px, 1fr)'} ${aiCollapsed ? 56 : aiPanelWidth}px`
+    }), [sidebarWidth, aiPanelWidth, aiCollapsed]);
+    const editorZoneStyle = useMemo(() =>
+      editorHeightPx ? {flex: `0 0 ${editorHeightPx}px`} : {flex: '1 1 30%'}
+    , [editorHeightPx]);
+
     return (
         <div className={`app-shell theme-${settings.theme ?? 'dark'} ${isIntegratedMacWindow ? 'window-integrated' : ''}`}
-             style={{gridTemplateColumns: `${sidebarWidth}px ${aiCollapsed ? 'minmax(720px, 1fr)' : 'minmax(640px, 1fr)'} ${aiCollapsed ? 56 : aiPanelWidth}px`}}>
+             style={gridStyle}>
 
             {view === 'settings' ? (
                 <SettingsView
@@ -418,25 +463,19 @@ export function App() {
                         onDeleteConnection={deleteConnection}
                         onToggleDb={toggleDb}
                         onToggleExpandDb={toggleExpandDb}
-                        onToggleDbSelector={() => setShowDbSelector((v) => !v)}
+                        onToggleDbSelector={toggleDbSelector}
                         onSearchChange={setSearchQuery}
-                        onClearSearch={() => setSearchQuery('')}
+                        onClearSearch={clearSearch}
                         onDbFilterChange={setDbFilter}
-                        onClearSelection={() => {
-                            setSelectedDbs([]);
-                            if (activeConnectionId) saveSelectedDbs(activeConnectionId, []).catch(() => setNotice('数据库选择保存失败'));
-                        }}
+                        onClearSelection={clearSelection}
                         onRefreshSchemas={refreshAllSchemas}
                         onSelectTable={setSelectedTable}
                         onOpenTableTab={openTableTab}
                         onStartResize={startSideResize}
                         view={view}
                         aiCollapsed={aiCollapsed}
-                        onNavigate={(v) => setView(v as AppView)}
-                        onToggleAi={() => {
-                            setView('workspace');
-                            setAiCollapsed((v) => !v);
-                        }}
+                        onNavigate={navigateTo}
+                        onToggleAi={toggleAiCollapsed}
                     />
 
                     <main className="workspace" ref={workspaceRef}>
@@ -452,14 +491,7 @@ export function App() {
                             aiLoading={loading.ai}
                             onRunQuery={runQuery}
                             onAiGenerate={generateSql}
-                            onDesignTable={() => {
-                                if (activeWorkTab?.dbName && activeWorkTab.tableName) {
-                                    setTableDesignerTarget({
-                                        database: activeWorkTab.dbName,
-                                        table: activeWorkTab.tableName
-                                    });
-                                }
-                            }}
+                            onDesignTable={designActiveTable}
                         />
                         <WorkTabStrip
                             workTabs={workTabs}
@@ -468,19 +500,14 @@ export function App() {
                             onCloseTab={closeWorkTab}
                         />
 
-                        <section className="editor-zone"
-                                 style={editorHeightPx ? {flex: `0 0 ${editorHeightPx}px`} : {flex: '1 1 30%'}}>
+                        <section className="editor-zone" style={editorZoneStyle}>
                             <div className="editor-toolbar">
                                 <span className="toolbar-status">{notice || 'Ready'}</span>
                             </div>
                             <SqlEditor
                                 value={activeSql}
-                                onChange={(newValue) => updateActiveWorkTab({
-                                    baseSql: newValue,
-                                    sql: newValue,
-                                    sort: undefined
-                                })}
-                                onRunQuery={() => runQuery()}
+                                onChange={handleSqlChange}
+                                onRunQuery={runQuery}
                                 schemaMap={schemaMap}
                                 selectedDbs={selectedDbs}
                                 databaseNames={availableDatabaseNames}
@@ -490,7 +517,7 @@ export function App() {
 
                         <div className="resize-handle-row" onMouseDown={startVerticalResize}/>
 
-                        <section className="result-zone" style={{flex: '1 1 70%', minHeight: 0}}>
+                        <section className="result-zone" style={RESULT_ZONE_STYLE}>
                             <div className="tabs">
                                 <button className={activeResultTab === 'results' ? 'active' : ''}
                                         onClick={() => updateActiveWorkTab({resultTab: 'results'})}><Rows3 size={14}/> 结果集
@@ -613,25 +640,16 @@ export function App() {
                         onKeyDown={handleAiKeyDown}
                         onSelectMention={selectMention}
                         onGenerate={generateSql}
-                        onSelectTemplate={() => insertTableSelect(100)}
+                        onSelectTemplate={selectTableTemplate}
                         onCountTemplate={insertTableCount}
                         onLoadDdl={loadTableDdl}
                         onBrowseTable={browseTable}
-                        onDesignTable={() => {
-                            if (!selectedSchema) return;
-                            setTableDesignerTarget({
-                                database: selectedSchemaDb ?? selectedDbs[0] ?? activeConnection?.database ?? '',
-                                table: selectedSchema.name
-                            });
-                        }}
+                        onDesignTable={designSelectedTable}
                         onCreateConversation={createConversation}
                         onSwitchConversation={switchConversation}
                         onDeleteConversation={deleteConversation}
                         onClearAllConversations={clearAllConversations}
-                        onNavigateToSettings={() => {
-                            setSettingsInitialTab('ai');
-                            setView('settings');
-                        }}
+                        onNavigateToSettings={navigateToAiSettings}
                     />
                 </>
             )}
@@ -641,7 +659,7 @@ export function App() {
                 connectionDraft={connectionDraft}
                 databases={connectionDatabases}
                 loading={loading.connection}
-                onClose={() => setShowConnectionModal(false)}
+                onClose={closeConnectionModal}
                 onChange={setConnectionDraft}
                 onSave={saveConnection}
                 onTest={testConnection}

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
+import { format as formatSql } from 'sql-formatter';
 import type { TableSchema } from '../../../shared/types';
 
 type CompletionKind = 'keyword' | 'database' | 'table' | 'column';
@@ -339,7 +340,7 @@ function insertionText(completion: Completion) {
   return KEYWORDS_NEEDING_SPACE.test(insert) ? `${insert} ` : insert;
 }
 
-export function SqlEditor({
+export const SqlEditor = memo(function SqlEditor({
   value,
   onChange,
   onRunQuery,
@@ -350,7 +351,7 @@ export function SqlEditor({
 }: {
   value: string;
   onChange: (value: string) => void;
-  onRunQuery?: () => void;
+  onRunQuery?: (sql?: string) => void;
   schemaMap: Record<string, TableSchema[]>;
   selectedDbs: string[];
   databaseNames?: string[];
@@ -362,6 +363,9 @@ export function SqlEditor({
   const onChangeRef = useRef(onChange);
   const isUpdatingFromProps = useRef(false);
   const glyphDecos = useRef<string[]>([]);
+  const glyphTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const onRunQueryRef = useRef(onRunQuery);
+  onRunQueryRef.current = onRunQuery;
 
   const completionProvider = useMemo(
     () => ({
@@ -432,6 +436,7 @@ export function SqlEditor({
       fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
       fontSize: 13,
       lineHeight: 23,
+      lineNumbersMinChars: 3,
       glyphMargin: true,
       padding: { top: 18, bottom: 18 },
       scrollBeyondLastLine: false,
@@ -451,6 +456,40 @@ export function SqlEditor({
     });
 
     editorRef.current = editor;
+
+    // Format SQL (Ctrl/Cmd+Shift+F)
+    editor.addAction({
+      id: 'dbmind.formatSql',
+      label: '格式化 SQL',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF],
+      run: (ed) => {
+        const model = ed.getModel();
+        if (!model) return;
+        try {
+          const formatted = formatSql(model.getValue(), { language: 'mysql', tabWidth: 2 });
+          ed.executeEdits('format', [{ range: model.getFullModelRange(), text: formatted }]);
+        } catch { /* invalid SQL, ignore */ }
+      }
+    });
+
+    // Right-click: execute selected SQL
+    editor.addAction({
+      id: 'dbmind.runSelection',
+      label: '执行选中的 SQL',
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.1,
+      run: (ed) => {
+        const model = ed.getModel();
+        if (!model) return;
+        const selection = ed.getSelection();
+        if (!selection || selection.isEmpty()) return;
+        const text = model.getValueInRange(selection)?.trim();
+        if (text) {
+          onRunQueryRef.current?.(text);
+        }
+      }
+    });
+
     const contentDisposable = editor.onDidChangeModelContent((event) => {
       if (isUpdatingFromProps.current) return;
       const nextValue = editor.getValue();
@@ -465,17 +504,41 @@ export function SqlEditor({
       }
     });
 
-    const onRunQueryRef = useRef(onRunQuery);
-    onRunQueryRef.current = onRunQuery;
-
     const gutterDisposable = editor.onMouseDown((e) => {
       if (!onRunQueryRef.current) return;
       const target = e.target;
-      if (
-        target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS ||
-        target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
-      ) {
-        onRunQueryRef.current();
+      if (target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+        const model = editor.getModel();
+        if (!model || !target.position) { onRunQueryRef.current(); return; }
+        const lineNumber = target.position.lineNumber;
+        const fullText = model.getValue();
+        // Walk backward from clicked line to find statement start (after previous ; or doc start)
+        let lineStart = lineNumber;
+        while (lineStart > 1) {
+          const prevLine = model.getLineContent(lineStart - 1).trim();
+          if (prevLine.endsWith(';')) break;
+          lineStart--;
+        }
+        // Walk forward from clicked line to find statement end (before next ; or doc end)
+        const totalLines = model.getLineCount();
+        let lineEnd = lineNumber;
+        while (lineEnd < totalLines) {
+          const currLine = model.getLineContent(lineEnd).trim();
+          if (currLine.endsWith(';')) break;
+          lineEnd++;
+        }
+        // If lineStart == 1 and lineEnd == totalLines, execute everything
+        if (lineStart === 1 && lineEnd === totalLines) {
+          onRunQueryRef.current();
+          return;
+        }
+        const startOffset = model.getOffsetAt({ lineNumber: lineStart, column: 1 });
+        const endLineContent = model.getLineContent(lineEnd);
+        const endOffset = model.getOffsetAt({ lineNumber: lineEnd, column: endLineContent.length + 1 });
+        const statement = fullText.slice(startOffset, endOffset).trim().replace(/;+\s*$/, '');
+        if (statement.length > 0) {
+          onRunQueryRef.current(statement);
+        }
       }
     });
 
@@ -485,23 +548,32 @@ export function SqlEditor({
       if (!model) return;
       const count = model.getLineCount();
       const decos: monaco.editor.IModelDeltaDecoration[] = [];
+      let isNewStatement = true;
       for (let i = 1; i <= count; i++) {
         const text = model.getLineContent(i).trim();
-        if (text.length > 0 && !text.startsWith('--')) {
+        if (text.length === 0 || text.startsWith('--')) {
+          continue;
+        }
+        if (isNewStatement) {
           decos.push({
             range: new monaco.Range(i, 1, i, 1),
             options: {
               glyphMarginClassName: 'sql-run-glyph',
-              glyphMarginHoverMessage: { value: '执行 SQL' },
+              glyphMarginHoverMessage: { value: '执行语句' },
             },
           });
+          isNewStatement = false;
+        }
+        if (text.endsWith(';')) {
+          isNewStatement = true;
         }
       }
       glyphDecos.current = editor.deltaDecorations(glyphDecos.current, decos);
     };
 
     const modelDisposable = editor.onDidChangeModelContent(() => {
-      updateGlyphs();
+      clearTimeout(glyphTimerRef.current);
+      glyphTimerRef.current = setTimeout(updateGlyphs, 200);
     });
     updateGlyphs();
 
@@ -538,4 +610,4 @@ export function SqlEditor({
       <div ref={hostRef} className="sql-monaco-editor" />
     </div>
   );
-}
+});

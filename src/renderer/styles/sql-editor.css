@@ -14,28 +14,37 @@
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
+/* Tight margins: line numbers narrow, glyph margin compact */
 .sql-editor-wrap .monaco-editor .margin-view-overlays .line-numbers {
   cursor: pointer;
+  padding-right: 4px !important;
 }
 .sql-editor-wrap .monaco-editor .margin-view-overlays .line-numbers:hover {
   color: var(--accent);
 }
+.sql-editor-wrap .monaco-editor .margin-view-overlays .glyph-margin {
+  width: 22px !important;
+  cursor: pointer;
+}
 
 .sql-run-glyph {
-  width: 16px !important;
-  margin-left: 4px;
+  width: 22px !important;
+  height: 100% !important;
+  display: block !important;
+  margin-left: 0;
   cursor: pointer;
-  opacity: 0.35;
+  opacity: 0.25;
   transition: opacity 0.12s;
 }
 .sql-run-glyph::before {
   content: '▶';
+  display: block;
+  width: 100%;
+  text-align: center;
   font-size: 8px;
   color: var(--accent2);
+  line-height: 23px;
 }
 .sql-run-glyph:hover {
   opacity: 1;
-}
-.sql-editor-wrap .monaco-editor .margin-view-overlays .glyph-margin {
-  cursor: pointer;
 }
