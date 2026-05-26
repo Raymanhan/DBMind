@@ -115,12 +115,6 @@ export const AiPanel = memo(function AiPanel({
         <button className="icon-btn" title="收起 AI 助手" onClick={onToggleCollapsed}><ChevronDown size={16} /></button>
       </div>
 
-      <div className="schema-card">
-        <div className="section-label">当前表</div>
-        <h2>{selectedSchema?.name ?? '未选择表'}</h2>
-        {selectedSchema?.comment && <p className="table-comment">{selectedSchema.comment}</p>}
-      </div>
-
       <div className="chat-list">
         {chat.map((message, index) => (
           <div className={`chat-message ${message.role}`} key={index}>

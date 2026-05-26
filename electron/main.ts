@@ -5,6 +5,9 @@ import type {
   AiConversation,
   AiGenerateRequest,
   AiGenerateResponse,
+  AiHistoryMessage,
+  AiOptimizeRequest,
+  AiOptimizeResponse,
   AiProviderConfig,
   BatchUpdateCellRequest,
   DbConnectionConfig,
@@ -48,14 +51,41 @@ function extractJsonObject(text: string): { sql?: string; explanation?: string }
   }
 }
 
+function buildMessagesWithHistory(
+  instructions: string,
+  history: AiHistoryMessage[] | undefined,
+  currentPrompt: string
+): { role: string; content: string }[] {
+  const messages: { role: string; content: string }[] = [
+    { role: 'system', content: instructions }
+  ];
+  if (history) {
+    for (const msg of history) {
+      messages.push({ role: msg.role, content: msg.content });
+    }
+  }
+  messages.push({ role: 'user', content: currentPrompt });
+  return messages;
+}
+
+function buildDdlPrompt(input: AiGenerateRequest): string {
+  if (!input.tableDdls?.length) return buildSchemaPrompt(input.tables, input.dialect);
+  return input.tableDdls
+    .map((item) => {
+      const tableLabel = item.database ? `${item.database}.${item.table}` : item.table;
+      return `-- ${tableLabel}\n${item.ddl.trim()}`;
+    })
+    .join('\n\n');
+}
+
 async function callAiProvider(input: AiGenerateRequest, provider: AiProviderConfig): Promise<string | null> {
   const apiKey = provider.apiKey || process.env.OPENAI_API_KEY;
   if (!apiKey && provider.provider !== 'ollama') return null;
 
-  const prompt = `数据库方言：${input.dialect}\n\nSchema:\n${buildSchemaPrompt(input.tables, input.dialect)}\n\n用户需求：${input.prompt}`;
+  const prompt = `数据库方言：${input.dialect}\n\n相关表完整 DDL:\n${buildDdlPrompt(input)}\n\n用户需求：${input.prompt}`;
 
   const instructions =
-    '你是 DBMind 的 SQL 生成引擎。只返回 JSON：{"sql": "...", "explanation": "..."}。必须只使用给定 schema 中的表和字段。SQL 中的表名必须与 schema 中给出的完全一致（含反引号引用的库名和表名）。默认生成只读 SELECT，除非用户明确要求写操作且应用配置允许。';
+    '你是 DBMind 的 SQL 生成引擎。只返回 JSON：{"sql": "...", "explanation": "..."}。必须只使用给定 DDL 中的表和字段。SQL 中的表名必须与 DDL 中给出的完全一致（含反引号引用的库名和表名）。默认生成只读 SELECT，除非用户明确要求写操作且应用配置允许。';
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), provider.timeoutMs ?? 30000);
@@ -66,6 +96,7 @@ async function callAiProvider(input: AiGenerateRequest, provider: AiProviderConf
     const baseUrl = normalizeBaseUrl(provider.baseUrl || defaultAiProvider.baseUrl);
     const isResponses = provider.apiMode === 'responses';
     const endpoint = isResponses ? `${baseUrl}/responses` : `${baseUrl}/chat/completions`;
+    const messages = buildMessagesWithHistory(instructions, input.history, prompt);
     const body = isResponses
       ? {
           model: provider.model,
@@ -78,10 +109,7 @@ async function callAiProvider(input: AiGenerateRequest, provider: AiProviderConf
           model: provider.model,
           temperature: provider.temperature,
           max_tokens: provider.maxOutputTokens,
-          messages: [
-            { role: 'system', content: instructions },
-            { role: 'user', content: prompt }
-          ]
+          messages
         };
 
     const response = await fetch(endpoint, {
@@ -98,86 +126,6 @@ async function callAiProvider(input: AiGenerateRequest, provider: AiProviderConf
     return data.output_text ?? data.choices?.[0]?.message?.content ?? null;
   } finally {
     clearTimeout(timeout);
-  }
-}
-
-async function* callAiProviderStream(input: AiGenerateRequest, provider: AiProviderConfig): AsyncGenerator<string> {
-  const apiKey = provider.apiKey || process.env.OPENAI_API_KEY;
-  if (!apiKey && provider.provider !== 'ollama') {
-    yield JSON.stringify({ error: '未配置 API Key' });
-    return;
-  }
-
-  const prompt = `数据库方言：${input.dialect}\n\nSchema:\n${buildSchemaPrompt(input.tables, input.dialect)}\n\n用户需求：${input.prompt}`;
-
-  const instructions =
-    '你是 DBMind 的 SQL 生成引擎。只返回 JSON：{"sql": "...", "explanation": "..."}。必须只使用给定 schema 中的表和字段。SQL 中的表名必须与 schema 中给出的完全一致（含反引号引用的库名和表名）。默认生成只读 SELECT，除非用户明确要求写操作且应用配置允许。';
-
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-
-  try {
-    const baseUrl = normalizeBaseUrl(provider.baseUrl || defaultAiProvider.baseUrl);
-    const endpoint = `${baseUrl}/chat/completions`;
-
-    const body = {
-      model: provider.model,
-      temperature: provider.temperature,
-      max_tokens: provider.maxOutputTokens,
-      stream: true,
-      messages: [
-        { role: 'system', content: instructions },
-        { role: 'user', content: prompt }
-      ]
-    };
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body)
-    });
-
-    if (!response.ok) {
-      yield JSON.stringify({ error: `AI 请求失败：${response.status}` });
-      return;
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) { yield JSON.stringify({ error: '无法读取流式响应' }); return; }
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') return;
-          try {
-            const parsed = JSON.parse(data) as { choices?: { delta?: { content?: string } }[] };
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) yield content;
-          } catch { /* skip unparseable chunks */ }
-        }
-      }
-    }
-
-    if (buffer.startsWith('data: ') && buffer.slice(6).trim() !== '[DONE]') {
-      try {
-        const parsed = JSON.parse(buffer.slice(6).trim()) as { choices?: { delta?: { content?: string } }[] };
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) yield content;
-      } catch { /* skip */ }
-    }
-  } catch (error) {
-    yield JSON.stringify({ error: error instanceof Error ? error.message : '流式请求失败' });
   }
 }
 
@@ -211,6 +159,104 @@ async function generateSql(input: AiGenerateRequest): Promise<AiGenerateResponse
     usedTables: input.tables.map((table) => table.name),
     warnings: validateSql(sql)
   };
+}
+
+async function optimizeSql(input: AiOptimizeRequest): Promise<AiOptimizeResponse> {
+  const instructions =
+    '你是 DBMind 的 SQL 优化引擎。分析给定的 SQL 语句并提供优化建议。只返回 JSON：{"sql": "优化后的 SQL", "explanation": "1. 潜在问题\\n2. 优化措施\\n3. 索引建议"}。保持 SQL 语义不变，仅优化性能、可读性和安全性。';
+
+  const prompt = `数据库方言：${input.dialect}\n\nSchema:\n${buildSchemaPrompt(input.tables, input.dialect)}\n\n原始 SQL：\n${input.sql}`;
+
+  try {
+    const settings = await readSettings();
+    const provider =
+      settings.aiProviders.find((item) => item.id === settings.defaultAiProviderId) ?? settings.aiProviders[0];
+    if (!provider) {
+      return {
+        sql: input.sql,
+        explanation: '未配置 AI Provider，无法提供优化建议。',
+        source: 'local',
+        warnings: validateSql(input.sql)
+      };
+    }
+
+    const apiKey = provider.apiKey || process.env.OPENAI_API_KEY;
+    if (!apiKey && provider.provider !== 'ollama') {
+      return {
+        sql: input.sql,
+        explanation: '未配置 API Key，无法提供优化建议。',
+        source: 'local',
+        warnings: validateSql(input.sql)
+      };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), provider.timeoutMs ?? 30000);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+    try {
+      const baseUrl = normalizeBaseUrl(provider.baseUrl || defaultAiProvider.baseUrl);
+      const isResponses = provider.apiMode === 'responses';
+      const endpoint = isResponses ? `${baseUrl}/responses` : `${baseUrl}/chat/completions`;
+      const body = isResponses
+        ? {
+            model: provider.model,
+            instructions,
+            input: prompt,
+            temperature: provider.temperature ?? 0.2,
+            max_output_tokens: provider.maxOutputTokens ?? 1200
+          }
+        : {
+            model: provider.model,
+            temperature: provider.temperature ?? 0.2,
+            max_tokens: provider.maxOutputTokens ?? 1200,
+            messages: [
+              { role: 'system', content: instructions },
+              { role: 'user', content: prompt }
+            ]
+          };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`AI 请求失败：${response.status} ${await response.text()}`);
+      const data = (await response.json()) as {
+        output_text?: string;
+        choices?: { message?: { content?: string } }[];
+      };
+      const output = data.output_text ?? data.choices?.[0]?.message?.content ?? null;
+      if (output) {
+        const parsed = extractJsonObject(output);
+        if (parsed?.sql) {
+          return {
+            sql: parsed.sql,
+            explanation: parsed.explanation ?? `已通过 ${provider.name} 优化 SQL。`,
+            source: provider.provider === 'openai' ? 'openai' : 'openai-compatible',
+            warnings: validateSql(parsed.sql)
+          };
+        }
+      }
+      return {
+        sql: input.sql,
+        explanation: `AI 返回格式异常，无法解析优化结果。原始输出：${output?.slice(0, 200) ?? '空'}`,
+        source: 'local',
+        warnings: validateSql(input.sql)
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch (error) {
+    return {
+      sql: input.sql,
+      explanation: `AI 优化服务不可用：${error instanceof Error ? error.message : '未知错误'}`,
+      source: 'local',
+      warnings: validateSql(input.sql)
+    };
+  }
 }
 
 async function testAiProvider(config: AiProviderConfig): Promise<{ ok: boolean; message: string }> {
@@ -359,54 +405,7 @@ app.whenReady().then(() => {
   // ── AI ──
   ipcMain.handle('ai:test-provider', async (_event, config: AiProviderConfig) => testAiProvider(config));
   ipcMain.handle('ai:generate-sql', async (_event, input: AiGenerateRequest) => generateSql(input));
-  ipcMain.on('ai:generate-sql-stream', async (event, payload: AiGenerateRequest | { requestId?: string; input: AiGenerateRequest }) => {
-    const requestId = 'input' in payload ? payload.requestId : undefined;
-    const input = 'input' in payload ? payload.input : payload;
-    const replyChannel = requestId ? `ai:stream-chunk:${requestId}` : 'ai:stream-chunk';
-    const sendChunk = (chunk: import('../src/shared/types.js').AiStreamChunk) => {
-      event.sender.send(replyChannel, chunk);
-    };
-    try {
-      const settings = await readSettings();
-      const provider = settings.aiProviders.find((item) => item.id === settings.defaultAiProviderId) ?? settings.aiProviders[0];
-      if (!provider || !provider.streaming) {
-        const result = await generateSql(input);
-        sendChunk({ done: true, sql: result.sql, explanation: result.explanation, source: result.source, usedTables: result.usedTables, warnings: result.warnings });
-        return;
-      }
-
-      let fullText = '';
-      for await (const chunk of callAiProviderStream(input, provider)) {
-        try {
-          const err = JSON.parse(chunk) as { error?: string };
-          if (err.error) {
-            sendChunk({ error: err.error });
-            return;
-          }
-        } catch {}
-        fullText += chunk;
-        sendChunk({ token: chunk });
-      }
-
-      const parsed = extractJsonObject(fullText);
-      let sql = localSqlFromPrompt(input.prompt, input.tables, input.dialect);
-      let explanation = '已根据 @table 引用的表结构生成 SQL。';
-      let source: AiGenerateResponse['source'] = 'local';
-      if (parsed?.sql) {
-        sql = parsed.sql;
-        explanation = parsed.explanation ?? `已通过 ${provider.name} 生成 SQL。`;
-        source = provider.provider === 'openai' ? 'openai' : 'openai-compatible';
-      }
-      sql = addLimitIfSelect(sql);
-      sendChunk({
-        done: true, sql, explanation, source,
-        usedTables: input.tables.map((t) => t.name),
-        warnings: validateSql(sql)
-      });
-    } catch (error) {
-      sendChunk({ error: error instanceof Error ? error.message : 'AI 生成失败' });
-    }
-  });
+  ipcMain.handle('ai:optimize-sql', async (_event, input: AiOptimizeRequest) => optimizeSql(input));
 
   createWindow();
   app.on('activate', () => {

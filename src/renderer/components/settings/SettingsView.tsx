@@ -11,7 +11,6 @@ const emptyAiProvider: AiProviderConfig = {
   temperature: 0.2,
   maxOutputTokens: 1200,
   timeoutMs: 30000,
-  streaming: true,
   defaultDialect: 'mysql',
   allowWriteSql: false,
   appendLimit: true
@@ -179,7 +178,6 @@ export function SettingsView({
             </div>
 
             <div className="settings-checks">
-              <label><input type="checkbox" checked={Boolean(aiDraft.streaming)} onChange={(event) => onChange({ ...aiDraft, streaming: event.target.checked })} /> 启用流式输出</label>
               <label><input type="checkbox" checked={Boolean(aiDraft.appendLimit)} onChange={(event) => onChange({ ...aiDraft, appendLimit: event.target.checked })} /> 默认追加 LIMIT</label>
               <label><input type="checkbox" checked={Boolean(aiDraft.allowWriteSql)} onChange={(event) => onChange({ ...aiDraft, allowWriteSql: event.target.checked })} /> 允许 AI 生成写操作</label>
             </div>

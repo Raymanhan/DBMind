@@ -6,6 +6,92 @@ function createConsoleTab(): WorkTab {
   return { id: 'console', title: 'SQL Console', kind: 'sql', baseSql: 'SELECT 1 AS connected;', sql: 'SELECT 1 AS connected;', result: null, resultTab: 'results', sort: undefined };
 }
 
+function splitSqlScript(sql: string): string[] {
+  const statements: string[] = [];
+  let current = '';
+  let quote: "'" | '"' | '`' | null = null;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    const next = sql[i + 1];
+
+    if (inLineComment) {
+      current += char;
+      if (char === '\n') inLineComment = false;
+      continue;
+    }
+
+    if (inBlockComment) {
+      current += char;
+      if (char === '*' && next === '/') {
+        current += next;
+        i++;
+        inBlockComment = false;
+      }
+      continue;
+    }
+
+    if (quote) {
+      current += char;
+      if (char === '\\' && quote !== '`' && next) {
+        current += next;
+        i++;
+        continue;
+      }
+      if (char === quote) {
+        if (next === quote) {
+          current += next;
+          i++;
+        } else {
+          quote = null;
+        }
+      }
+      continue;
+    }
+
+    if (char === '-' && next === '-') {
+      current += char + next;
+      i++;
+      inLineComment = true;
+      continue;
+    }
+
+    if (char === '#') {
+      current += char;
+      inLineComment = true;
+      continue;
+    }
+
+    if (char === '/' && next === '*') {
+      current += char + next;
+      i++;
+      inBlockComment = true;
+      continue;
+    }
+
+    if (char === '\'' || char === '"' || char === '`') {
+      current += char;
+      quote = char;
+      continue;
+    }
+
+    if (char === ';') {
+      const statement = current.trim();
+      if (statement) statements.push(statement);
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  const tail = current.trim();
+  if (tail) statements.push(tail);
+  return statements;
+}
+
 export function useWorkTabs({
   api, activeConnectionId, selectedDbs, setNotice, setLoadingFlag
 }: {
@@ -33,6 +119,14 @@ export function useWorkTabs({
   }, []);
 
   const updateActiveWorkTab = useCallback((patch: Partial<WorkTab>) => {
+    if ('sql' in patch && typeof patch.sql !== 'string') {
+      console.error('[updateActiveWorkTab] sql is not a string:', typeof patch.sql, patch.sql);
+      patch = { ...patch, sql: String(patch.sql ?? '') };
+    }
+    if ('baseSql' in patch && typeof patch.baseSql !== 'string') {
+      console.error('[updateActiveWorkTab] baseSql is not a string:', typeof patch.baseSql, patch.baseSql);
+      patch = { ...patch, baseSql: String(patch.baseSql ?? '') };
+    }
     setWorkTabs((items) => items.map((tab) => (tab.id === activeWorkTabId ? { ...tab, ...patch } : tab)));
   }, [activeWorkTabId]);
 
@@ -58,14 +152,36 @@ export function useWorkTabs({
     if (!tab || !activeConnectionId) { setNotice('请先保存并选择一个数据库连接。'); return; }
     setLoadingFlag('query', true);
     setNotice('');
+    const targetDb = tab.dbName ?? (selectedDbs.length === 1 ? selectedDbs[0] : undefined);
+    const sourceSql = typeof sqlOverride === 'string' ? sqlOverride : tab.sql;
+    const statements = splitSqlScript(sourceSql).map(String);
+    let lastResult = tab.result;
+    let step = 0;
     try {
-      const targetDb = tab.dbName ?? (selectedDbs.length === 1 ? selectedDbs[0] : undefined);
-      const data = await api.runQuery(activeConnectionId, sqlOverride ?? tab.sql, targetDb);
-      updateWorkTab(tabId, { result: data, resultTab: 'results' });
+      if (statements.length === 0) {
+        setNotice('没有可执行的 SQL。');
+        return;
+      }
+      for (; step < statements.length; step++) {
+        const sql = String(statements[step]);
+        const data = await api.runQuery(activeConnectionId, sql, targetDb);
+        lastResult = data;
+        if (statements.length > 1) {
+          setNotice(`${step + 1}/${statements.length} · ${data.rowCount} 行 · ${data.durationMs}ms`);
+        }
+      }
+      updateWorkTab(tabId, { result: lastResult, resultTab: 'results' });
       api.getQueryHistory().then(setQueryHistory).catch(() => undefined);
-      setNotice(`执行完成：${data.rowCount} 行 · ${data.durationMs}ms`);
+      if (statements.length > 1) {
+        setNotice(`${statements.length} 条语句全部执行完成，最后一条 ${lastResult?.rowCount ?? 0} 行 · ${lastResult?.durationMs ?? 0}ms`);
+      } else {
+        setNotice(`执行完成：${lastResult?.rowCount ?? 0} 行 · ${lastResult?.durationMs ?? 0}ms`);
+      }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '查询失败');
+      console.error('[runWorkTabQuery] error:', error, 'step:', step, 'sql type:', typeof statements[step], 'value:', String(statements[step]).slice(0, 100));
+      updateWorkTab(tabId, { result: lastResult, resultTab: 'results' });
+      const errMsg = error instanceof Error ? error.message : '查询失败';
+      setNotice(statements.length > 1 ? `第 ${step + 1}/${statements.length} 条出错：${errMsg}` : errMsg);
     } finally {
       setLoadingFlag('query', false);
     }

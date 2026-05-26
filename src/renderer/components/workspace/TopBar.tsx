@@ -1,4 +1,4 @@
-import { Database, Edit3, Play, Server, Sparkles, Table2 } from 'lucide-react';
+import { Database, Edit3, Play, Server, Sparkles, Table2, Wand2 } from 'lucide-react';
 import type { AiProviderConfig, DbConnectionConfig, WorkTab } from '../../../shared/types';
 
 export function TopBar({
@@ -12,7 +12,8 @@ export function TopBar({
   queryLoading,
   aiLoading,
   onRunQuery,
-  onDesignTable
+  onDesignTable,
+  onOptimizeSql
 }: {
   workTab?: WorkTab;
   connection?: DbConnectionConfig;
@@ -25,6 +26,7 @@ export function TopBar({
   aiLoading: boolean;
   onRunQuery: () => void;
   onDesignTable: () => void;
+  onOptimizeSql: () => void;
 }) {
   return (
     <header className="topbar">
@@ -40,7 +42,12 @@ export function TopBar({
             <Edit3 size={13} /> 设计
           </button>
         )}
-        <button className="run-btn" onClick={onRunQuery} disabled={queryLoading || aiLoading}><Play size={14} /> {queryLoading ? '执行中' : '执行'}</button>
+        {defaultProvider && (
+          <button className="ghost" onClick={onOptimizeSql} disabled={queryLoading || aiLoading}>
+            <Wand2 size={13} /> 优化
+          </button>
+        )}
+        <button className="run-btn" onClick={() => onRunQuery()} disabled={queryLoading || aiLoading}><Play size={14} /> {queryLoading ? '执行中' : '执行'}</button>
       </div>
     </header>
   );

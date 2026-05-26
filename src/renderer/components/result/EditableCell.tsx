@@ -1,4 +1,4 @@
-import {memo, useEffect, useMemo, useRef, useState} from 'react';
+import {memo, useEffect, useMemo, useRef, useState, type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
 import {Check, Copy, Maximize2, X} from 'lucide-react';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
@@ -7,6 +7,7 @@ import type {ColumnSchema} from '../../../shared/types';
 
 export interface InlineCellEditorState {
   rowIndex: number;
+  columnIndex?: number;
   column: string;
   value: string;
   asNull: boolean;
@@ -18,7 +19,9 @@ interface PendingCellEdit {
 }
 
 interface EditableCellProps {
+  as?: 'td' | 'div';
   rowIndex: number;
+  columnIndex?: number;
   column: string;
   value: unknown;
   reason: string | null;
@@ -32,6 +35,9 @@ interface EditableCellProps {
   onCommit: (next: InlineCellEditorState) => void;
   onCancel: () => void;
   onCopy?: () => void;
+  id?: string;
+  className?: string;
+  style?: CSSProperties;
 }
 
 type CellEditorKind = 'text' | 'long-text' | 'json' | 'date' | 'datetime' | 'time' | 'number' | 'binary';
@@ -192,7 +198,9 @@ function FloatingCellEditor({
 }
 
 export const EditableCell = memo(function EditableCell({
+  as = 'td',
   rowIndex,
+  columnIndex,
   column,
   value,
   reason,
@@ -205,7 +213,10 @@ export const EditableCell = memo(function EditableCell({
   onEditorChange,
   onCommit,
   onCancel,
-  onCopy
+  onCopy,
+  id,
+  className,
+  style
 }: EditableCellProps) {
   const isEditing = editorState?.rowIndex === rowIndex && editorState.column === column;
   const editorKind = useMemo(() => inferEditorKind(columnSchema, pendingEdit ? pendingEdit.newValue : value), [columnSchema, pendingEdit, value]);
@@ -213,7 +224,8 @@ export const EditableCell = memo(function EditableCell({
     reason ? 'cell-readonly' : 'cell-editable',
     pendingEdit ? 'cell-edited' : '',
     isEditing ? 'cell-editing' : '',
-    `cell-kind-${editorKind}`
+    `cell-kind-${editorKind}`,
+    className ?? ''
   ].filter(Boolean).join(' ');
   const inputType = editorKind === 'number' ? 'number'
     : editorKind === 'date' ? 'date'
@@ -222,12 +234,18 @@ export const EditableCell = memo(function EditableCell({
           : 'text';
   const needsFloatingEditor = isEditing && editorState && (editorKind === 'json' || editorKind === 'long-text');
 
+  const CellTag = as;
+
   return (
-    <td
+    <CellTag
       className={tdClass}
-	      data-cell=""
-	      data-row-index={rowIndex}
-	      data-column={column}
+      id={id}
+      data-cell=""
+      data-row-index={rowIndex}
+      data-column-index={columnIndex}
+      data-column={column}
+      role={as === 'div' ? 'gridcell' : undefined}
+      style={style}
       title={reason ?? (pendingEdit ? '已修改，双击重新编辑' : '双击编辑')}
     >
       {isEditing && editorState ? (
@@ -315,6 +333,6 @@ export const EditableCell = memo(function EditableCell({
           </button>
         </div>
       )}
-    </td>
+    </CellTag>
   );
 });

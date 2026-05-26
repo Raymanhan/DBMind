@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import pg from 'pg';
 import type { DbConnectionConfig, QueryHistoryItem, QueryResult } from '../../src/shared/types.js';
 
 export function mysqlConnectionOptions(config: DbConnectionConfig): mysql.ConnectionOptions {
@@ -15,9 +16,25 @@ export function mysqlConnectionOptions(config: DbConnectionConfig): mysql.Connec
   };
 }
 
-export function assertWritableMysql(config: DbConnectionConfig): void {
-  if (config.driver !== 'mysql') throw new Error('当前仅 MySQL 支持编辑。');
-  if (config.readonly) throw new Error('当前连接为只读模式，已阻止写操作。');
+export function pgConnectionOptions(config: DbConnectionConfig): pg.ClientConfig {
+  return {
+    host: config.host || 'localhost',
+    port: config.port || 5432,
+    user: config.user,
+    password: config.password,
+    database: config.database || undefined,
+    ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
+    connectionTimeoutMillis: (config.connectTimeout || 10000)
+  };
+}
+
+export function assertWritable(config: DbConnectionConfig): void {
+  if (config.driver !== 'mysql' && config.driver !== 'postgres') {
+    throw new Error('不支持的数据库类型。');
+  }
+  if (config.readonly) {
+    throw new Error('当前连接为只读模式，已阻止写操作。');
+  }
 }
 
 export async function appendHistory(

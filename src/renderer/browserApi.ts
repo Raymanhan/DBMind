@@ -1,6 +1,8 @@
 import type {
   AiGenerateRequest,
   AiGenerateResponse,
+  AiOptimizeRequest,
+  AiOptimizeResponse,
   AppSettings,
   DbConnectionConfig,
   DbmindApi,
@@ -65,7 +67,6 @@ let settings: AppSettings = {
       temperature: 0.2,
       maxOutputTokens: 1200,
       timeoutMs: 30000,
-      streaming: false,
       defaultDialect: 'mysql',
       allowWriteSql: false,
       appendLimit: true
@@ -97,8 +98,15 @@ export const browserFallbackApi: DbmindApi = {
     const databaseName = _database ?? demoConnection.database ?? 'yingyan';
     return demoSchemas[databaseName] ?? [];
   },
-  async getTableDdl() {
-    throw browserOnlyError();
+  async getTableDdl(_connectionId: string, tableName: string, database?: string) {
+    const schema = (demoSchemas[database ?? demoConnection.database ?? 'yingyan'] ?? []).find((table) => table.name === tableName);
+    if (!schema) return '';
+    const columns = schema.columns.map((column) => {
+      const nullable = column.nullable === false ? ' NOT NULL' : '';
+      const primary = column.primary ? ' PRIMARY KEY' : '';
+      return `  \`${column.name}\` ${column.type}${nullable}${primary}`;
+    });
+    return `CREATE TABLE \`${schema.name}\` (\n${columns.join(',\n')}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
   },
   async runQuery(_connectionId: string, _sql: string, _database?: string): Promise<QueryResult> {
     return {
@@ -160,9 +168,13 @@ export const browserFallbackApi: DbmindApi = {
       warnings: validateSql(sql)
     };
   },
-  async generateSqlStream(input: AiGenerateRequest, onChunk) {
-    const result = await this.generateSql(input);
-    onChunk({ done: true, sql: result.sql, explanation: result.explanation, source: result.source, usedTables: result.usedTables, warnings: result.warnings });
+  async optimizeSql(input: AiOptimizeRequest): Promise<AiOptimizeResponse> {
+    return {
+      sql: input.sql,
+      explanation: '浏览器预览不支持 AI 优化；桌面应用会使用设置页中的 AI Provider 进行 SQL 优化。',
+      source: 'local',
+      warnings: validateSql(input.sql)
+    };
   },
   async listAiConversations() { return []; },
   async saveAiConversation() { return []; },

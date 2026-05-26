@@ -6,8 +6,8 @@ import {ConnectionModal} from './components/connection/ConnectionModal';
 import {SqlEditor} from './components/editor/SqlEditor';
 import {SqlConfirmModal} from './components/modals/SqlConfirmModal';
 
-import {EditableCell} from './components/result/EditableCell';
 import {HistoryPanel} from './components/result/HistoryPanel';
+import {ResultGrid} from './components/result/ResultGrid';
 import {Sidebar} from './components/sidebar/Sidebar';
 import {TableDesignerModal} from './components/schema/TableDesigner';
 import {TopBar} from './components/workspace/TopBar';
@@ -63,7 +63,6 @@ const emptyAiProvider: AiProviderConfig = {
     temperature: 0.2,
     maxOutputTokens: 1200,
     timeoutMs: 30000,
-    streaming: false,
     defaultDialect: 'mysql',
     allowWriteSql: false,
     appendLimit: true
@@ -186,7 +185,7 @@ export function App() {
 
     const getCellEditBlockReason = useCallback((row: Record<string, unknown>, column: string): string | null => {
         if (!activeConnection) return '请先选择连接';
-        if (activeConnection.driver !== 'mysql') return '当前仅 MySQL 支持编辑数据';
+        if (activeConnection.driver !== 'mysql' && activeConnection.driver !== 'postgres') return '当前仅 MySQL / PostgreSQL 支持编辑数据';
         if (activeConnection.readonly) return '当前连接为只读模式';
         if (activeWorkTab?.kind !== 'table' || !activeWorkTab.dbName || !activeWorkTab.tableName) return '普通 SQL 结果集暂不支持编辑';
         if (!activeTableSchema) return '未找到当前表结构';
@@ -220,7 +219,7 @@ export function App() {
     const {
         aiInput, setAiInput, activeMessages, textareaRef, mentionQuery, mentionIndex,
         mentionedTables, mentionOptions, handleAiChange, selectMention, handleAiKeyDown,
-        generateSql, insertTableSelect, insertTableCount, loadTableDdl,
+        generateSql, optimizeSql, insertTableSelect, insertTableCount, loadTableDdl,
         conversations, activeConversationId,
         createConversation, switchConversation, deleteConversation, clearAllConversations
     } = useAiAssistant({
@@ -230,12 +229,13 @@ export function App() {
     });
 
     const handleSqlChange = useCallback((newValue: string) => {
+        if (typeof newValue !== 'string') console.error('[handleSqlChange] NOT A STRING:', typeof newValue, newValue);
         updateActiveWorkTab({ baseSql: newValue, sql: newValue, sort: undefined });
     }, [updateActiveWorkTab]);
     const runQuery = useCallback((sqlOverride?: string) => {
         setPendingEdits([]);
         setActiveInlineEditor(null);
-        return runWorkTabQuery(activeWorkTabId, sqlOverride);
+        return runWorkTabQuery(activeWorkTabId, typeof sqlOverride === 'string' ? sqlOverride : undefined);
     }, [runWorkTabQuery, activeWorkTabId]);
 
     // Stable callbacks for Sidebar / AiPanel / modals
@@ -367,77 +367,12 @@ export function App() {
     const visibleRows = useMemo(() => activeResult?.rows.slice(0, 1000) ?? [], [activeResult]);
     const isResultTruncated = Boolean(activeResult && activeResult.rows.length > visibleRows.length);
 
-    // Ref-based callbacks: avoid rebuilding resultTableBody when edit state changes
-    const beginCellEditRef = useRef(beginCellEdit);
-    beginCellEditRef.current = beginCellEdit;
-    const finishCellEditRef = useRef(finishCellEdit);
-    finishCellEditRef.current = finishCellEdit;
-    const visibleRowsRef = useRef(visibleRows);
-    visibleRowsRef.current = visibleRows;
-
     const cancelEdit = useCallback(() => setActiveInlineEditor(null), []);
 
-    // Event delegation: double-click on tbody → beginCellEdit
-    const handleTableDoubleClick = useCallback((e: React.MouseEvent<HTMLTableSectionElement>) => {
-        const td = (e.target as HTMLElement).closest('[data-cell]');
-        if (!td) return;
-        const rowIndex = Number(td.getAttribute('data-row-index'));
-        const column = td.getAttribute('data-column');
-        if (isNaN(rowIndex) || !column) return;
-        const row = visibleRowsRef.current[rowIndex];
-        if (row) beginCellEditRef.current(rowIndex, row, column);
-    }, []);
-
-    const handleTableCellCopy = useCallback((e: React.MouseEvent<HTMLTableSectionElement>) => {
-        const btn = (e.target as HTMLElement).closest('.cell-copy-btn');
-        if (!btn) return;
-        e.stopPropagation();
-        const td = btn.closest('[data-cell]');
-        if (!td) return;
-        const rowIndex = Number(td.getAttribute('data-row-index'));
-        const column = td.getAttribute('data-column');
-        if (isNaN(rowIndex) || !column) return;
-        const row = visibleRowsRef.current[rowIndex];
-        if (row) {
-            const text = row[column] === null || row[column] === undefined ? '' : String(row[column]);
-            navigator.clipboard.writeText(text).then(() => setNotice('已复制单元格')).catch(() => setNotice('复制失败'));
-        }
+    const copyCellValue = useCallback((value: unknown) => {
+        const text = value === null || value === undefined ? '' : String(value);
+        navigator.clipboard.writeText(text).then(() => setNotice('已复制单元格')).catch(() => setNotice('复制失败'));
     }, [setNotice]);
-
-    const resultTableBody = useMemo(() => {
-      if (!activeResult) return null;
-      return visibleRows.map((row, index) => (
-        <tr key={index}>
-          <td className="row-index-cell">{index + 1}</td>
-          {activeResult.columns.map((column) => {
-            const reason = getCellEditBlockReason(row, column);
-            const pendingKey = `${index}:${column}`;
-            const pendingEdit = pendingEditsMap.get(pendingKey);
-            const displayValue = pendingEdit
-              ? (pendingEdit.asNull ? 'NULL' : pendingEdit.newValue)
-              : formatValue(row[column]);
-            return (
-              <EditableCell
-                key={column}
-                rowIndex={index}
-                column={column}
-                value={row[column]}
-                reason={reason}
-                columnSchema={activeColumnSchemaMap.get(column)}
-                pendingEdit={pendingEdit}
-                editorState={activeInlineEditor}
-                displayValue={displayValue}
-                isNullDisplay={Boolean(pendingEdit?.asNull)}
-                onBeginEdit={() => beginCellEditRef.current(index, row, column)}
-                onEditorChange={setActiveInlineEditor}
-                onCommit={finishCellEditRef.current}
-                onCancel={cancelEdit}
-              />
-            );
-          })}
-        </tr>
-      ));
-    }, [visibleRows, activeResult, pendingEditsMap, activeColumnSchemaMap, activeInlineEditor, getCellEditBlockReason, setActiveInlineEditor, cancelEdit, formatValue]);
 
     const gridStyle = useMemo(() => ({
       gridTemplateColumns: `${sidebarWidth}px ${aiCollapsed ? 'minmax(720px, 1fr)' : 'minmax(640px, 1fr)'} ${aiCollapsed ? 56 : aiPanelWidth}px`
@@ -520,6 +455,7 @@ export function App() {
                             aiLoading={loading.ai}
                             onRunQuery={runQuery}
                             onDesignTable={designActiveTable}
+                            onOptimizeSql={() => optimizeSql(activeSql)}
                         />
                         <WorkTabStrip
                             workTabs={workTabs}
@@ -610,24 +546,22 @@ export function App() {
                                         sort: undefined
                                     })} onClear={clearHistory}/>
                                 ) : activeResult ? (
-                                    <table>
-                                        <thead>
-                                        <tr>
-                                            <th className="row-index-head">#</th>
-                                            {activeResult.columns.map((column) => (
-                                                <th key={column}>
-                                                    <button
-                                                        className={`column-sort ${activeWorkTab?.sort?.column === column ? 'active' : ''}`}
-                                                        onClick={() => setColumnSort(column)}>
-                                                        <span>{column}</span>
-                                                        <em>{activeWorkTab?.sort?.column === column ? (activeWorkTab.sort.direction === 'asc' ? '↑' : '↓') : '↕'}</em>
-                                                    </button>
-                                                </th>
-                                            ))}
-                                        </tr>
-                                        </thead>
-                                        <tbody onDoubleClick={handleTableDoubleClick} onClick={handleTableCellCopy}>{resultTableBody}</tbody>
-                                    </table>
+                                    <ResultGrid
+                                        columns={activeResult.columns}
+                                        rows={visibleRows}
+                                        sort={activeWorkTab?.sort}
+                                        pendingEditsMap={pendingEditsMap}
+                                        columnSchemaMap={activeColumnSchemaMap}
+                                        editorState={activeInlineEditor}
+                                        getCellEditBlockReason={getCellEditBlockReason}
+                                        formatValue={formatValue}
+                                        onSortColumn={setColumnSort}
+                                        onBeginEdit={beginCellEdit}
+                                        onEditorChange={setActiveInlineEditor}
+                                        onCommit={finishCellEdit}
+                                        onCancel={cancelEdit}
+                                        onCopyCell={copyCellValue}
+                                    />
                                 ) : (
                                     <div className="empty-state workspace-empty">
                                         {!activeConnection ? (

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import type { AiConversation, AiGenerateResponse, AiProviderConfig, ChatMessage, DbmindApi, TableSchema } from '../../shared/types';
+import type { AiConversation, AiGenerateResponse, AiHistoryMessage, AiOptimizeResponse, AiProviderConfig, AiTableDdl, ChatMessage, DbmindApi, TableSchema } from '../../shared/types';
 import { extractTableMentions } from '../../shared/sqlTools';
 import { quoteMysqlIdentifier } from '../../shared/sql/identifiers';
 import type { WorkTab } from '../../shared/types';
@@ -22,6 +22,29 @@ function makeConversation(id: string): AiConversation {
 
 function titleFromMessage(content: string): string {
   return content.length > 40 ? content.slice(0, 40).trimEnd() + '...' : content;
+}
+
+function buildConversationHistory(messages: ChatMessage[], maxRounds = 5): AiHistoryMessage[] {
+  const history: AiHistoryMessage[] = [];
+  // Skip the initial welcome message, start from index 1
+  const relevant = messages.slice(1);
+  // Take at most maxRounds pairs (2 messages per round)
+  const recent = relevant.slice(-maxRounds * 2);
+  for (const msg of recent) {
+    if (msg.role === 'user') {
+      history.push({ role: 'user', content: `用户需求：${msg.content}` });
+    } else {
+      const parts: string[] = [];
+      if (msg.sql) parts.push(`SQL: ${msg.sql}`);
+      if (msg.content) parts.push(`说明：${msg.content}`);
+      history.push({ role: 'assistant', content: parts.join('\n') });
+    }
+  }
+  return history;
+}
+
+function tableContextKey(table: TableSchema): string {
+  return `${table.dbName ?? ''}.${table.name}`.toLowerCase();
 }
 
 export function useAiAssistant({
@@ -75,7 +98,7 @@ export function useAiAssistant({
     const { db, table } = mentionQuery;
     const result: { db: string; table: TableSchema }[] = [];
     for (const [dbName, tables] of Object.entries(schemaMap)) {
-      if (db && db !== dbName) continue;
+      if (db && db.toLowerCase() !== dbName.toLowerCase()) continue;
       for (const t of tables) {
         if (!table || t.name.toLowerCase().includes(table.toLowerCase())) {
           result.push({ db: dbName, table: t });
@@ -204,42 +227,77 @@ export function useAiAssistant({
   const generateSql = useCallback(async () => {
     setLoadingFlag('ai', true);
     const currentInput = aiInputRef.current;
-    const names = extractTableMentions(currentInput);
-    const tables: TableSchema[] = [];
-    for (const name of names) {
-      if (name.includes('.')) {
-        const [db, tableName] = name.split('.');
-        const dbTables = schemaMap[db];
-        if (dbTables) { const found = dbTables.find((t) => t.name === tableName); if (found) tables.push({ ...found, dbName: db }); }
-      } else {
-        const found = allTables.find((t) => t.name === name);
-        if (found) tables.push(found);
-      }
-    }
-    const context = tables.length ? tables : selectedSchema ? [selectedSchema] : [];
-    const request = { prompt: currentInput, dialect: (activeConnection?.driver as 'mysql' | 'postgres') ?? 'mysql', tables: context };
-
     const currentConvId = activeConvIdRef.current;
-    const userMsg: ChatMessage = { role: 'user', content: currentInput };
-
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (c.id !== currentConvId) return c;
-        const needsTitle = c.title === '新对话' && c.messages.filter((m) => m.role !== 'assistant' || m.content).length <= 1;
-        return {
-          ...c,
-          title: needsTitle ? titleFromMessage(currentInput) : c.title,
-          messages: [...c.messages, userMsg],
-          updatedAt: new Date().toISOString()
-        };
-      })
-    );
-
     try {
+      const names = extractTableMentions(currentInput);
+      const tables: TableSchema[] = [];
+      const seenTables = new Set<string>();
+      const addTable = (table: TableSchema, dbName?: string) => {
+        const item = { ...table, dbName: table.dbName ?? dbName };
+        const key = tableContextKey(item);
+        if (!seenTables.has(key)) {
+          seenTables.add(key);
+          tables.push(item);
+        }
+      };
+
+      for (const name of names) {
+        if (name.includes('.')) {
+          const [db, tableName] = name.split('.');
+          const dbKey = Object.keys(schemaMap).find((k) => k.toLowerCase() === db.toLowerCase());
+          if (dbKey) {
+            const found = schemaMap[dbKey].find((t) => t.name.toLowerCase() === tableName.toLowerCase());
+            if (found) addTable(found, dbKey);
+          }
+        } else {
+          let matched = false;
+          for (const [dbName, dbTables] of Object.entries(schemaMap)) {
+            const found = dbTables.find((t) => t.name.toLowerCase() === name.toLowerCase());
+            if (found) {
+              addTable(found, dbName);
+              matched = true;
+              break;
+            }
+          }
+          if (!matched) {
+            const found = allTables.find((t) => t.name.toLowerCase() === name.toLowerCase());
+            if (found) addTable(found);
+          }
+        }
+      }
+      const context = tables.length
+        ? tables
+        : selectedSchema
+          ? [{ ...selectedSchema, dbName: selectedSchema.dbName ?? selectedSchemaDb }]
+          : [];
+      const tableDdls: AiTableDdl[] = await Promise.all(context.map(async (table) => {
+        const ddl = await api.getTableDdl(activeConnectionId, table.name, table.dbName);
+        if (!ddl.trim()) throw new Error(`未读取到 ${table.dbName ? `${table.dbName}.` : ''}${table.name} 的完整 DDL`);
+        return { database: table.dbName, table: table.name, ddl };
+      }));
+      const currentConv = conversationsRef.current.find(c => c.id === activeConvIdRef.current);
+      const history = buildConversationHistory(currentConv?.messages ?? [welcomeMessage]);
+      const request = { prompt: currentInput, dialect: (activeConnection?.driver as 'mysql' | 'postgres') ?? 'mysql', tables: context, tableDdls, history };
+
+      const userMsg: ChatMessage = { role: 'user', content: currentInput };
+
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== currentConvId) return c;
+          const needsTitle = c.title === '新对话' && c.messages.filter((m) => m.role !== 'assistant' || m.content).length <= 1;
+          return {
+            ...c,
+            title: needsTitle ? titleFromMessage(currentInput) : c.title,
+            messages: [...c.messages, userMsg],
+            updatedAt: new Date().toISOString()
+          };
+        })
+      );
+
       const response: AiGenerateResponse = await api.generateSql(request);
       const assistantMsg: ChatMessage = {
         role: 'assistant', content: response.explanation, sql: response.sql, warnings: response.warnings,
-        meta: `${response.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入 ${response.usedTables.join(', ') || selectedTable}`
+        meta: `${response.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · 已注入完整 DDL：${tableDdls.map((item) => item.database ? `${item.database}.${item.table}` : item.table).join(', ') || selectedTable}`
       };
       setConversations((prev) =>
         prev.map((c) => c.id === currentConvId
@@ -255,8 +313,60 @@ export function useAiAssistant({
           : c)
       );
     } finally { setLoadingFlag('ai', false); }
-  }, [schemaMap, allTables, selectedSchema, api, activeConnection, updateActiveWorkTab, defaultProvider, setLoadingFlag, selectedTable]);
+  }, [schemaMap, allTables, selectedSchema, selectedSchemaDb, api, activeConnectionId, activeConnection, updateActiveWorkTab, defaultProvider, setLoadingFlag, selectedTable]);
   generateSqlRef.current = generateSql;
+
+  const optimizeSql = useCallback(async (sql: string) => {
+    if (!sql.trim()) { setNotice('没有可优化的 SQL。'); return; }
+    setLoadingFlag('ai', true);
+    const tables = selectedSchema ? [selectedSchema] : [];
+    const dialect = (activeConnection?.driver as 'mysql' | 'postgres') ?? 'mysql';
+
+    let currentConvId = activeConvIdRef.current;
+    if (!conversationsRef.current.find(c => c.id === currentConvId)) {
+      const id = crypto.randomUUID();
+      setConversations(prev => [makeConversation(id), ...prev]);
+      setActiveConversationId(id);
+      currentConvId = id;
+    }
+
+    const userMsg: ChatMessage = { role: 'user', content: `请优化以下 SQL：\n\`\`\`sql\n${sql}\n\`\`\`` };
+
+    setConversations((prev) =>
+      prev.map((c) => {
+        if (c.id !== currentConvId) return c;
+        const needsTitle = c.title === '新对话' && c.messages.filter((m) => m.role !== 'assistant' || m.content).length <= 1;
+        return {
+          ...c,
+          title: needsTitle ? 'SQL 优化' : c.title,
+          messages: [...c.messages, userMsg],
+          updatedAt: new Date().toISOString()
+        };
+      })
+    );
+
+    try {
+      const response: AiOptimizeResponse = await api.optimizeSql({ sql, dialect, tables });
+      const assistantMsg: ChatMessage = {
+        role: 'assistant', content: response.explanation, sql: response.sql, warnings: response.warnings,
+        meta: `${response.source === 'local' ? 'Local' : defaultProvider?.name ?? 'AI'} · SQL 优化`
+      };
+      setConversations((prev) =>
+        prev.map((c) => c.id === currentConvId
+          ? { ...c, messages: [...c.messages, assistantMsg], updatedAt: new Date().toISOString() }
+          : c)
+      );
+      if (response.sql !== sql) {
+        updateActiveWorkTab({ baseSql: response.sql, sql: response.sql, sort: undefined });
+      }
+    } catch (error) {
+      setConversations((prev) =>
+        prev.map((c) => c.id === currentConvId
+          ? { ...c, messages: [...c.messages, { role: 'assistant', content: error instanceof Error ? error.message : 'SQL 优化失败', meta: 'AI 错误' }], updatedAt: new Date().toISOString() }
+          : c)
+      );
+    } finally { setLoadingFlag('ai', false); }
+  }, [selectedSchema, activeConnection, api, updateActiveWorkTab, defaultProvider, setLoadingFlag, setNotice]);
 
   const insertTableSelect = useCallback((limit = 100) => {
     if (!selectedSchema) { setNotice('请先选择一张表。'); return; }
@@ -293,6 +403,6 @@ export function useAiAssistant({
     createConversation, switchConversation, deleteConversation, clearAllConversations,
     textareaRef, mentionQuery, mentionIndex, mentionedTables, mentionOptions,
     handleAiChange, selectMention, handleAiKeyDown,
-    generateSql, insertTableSelect, insertTableCount, loadTableDdl, browseSelectedTable
+    generateSql, optimizeSql, insertTableSelect, insertTableCount, loadTableDdl, browseSelectedTable
   };
 }

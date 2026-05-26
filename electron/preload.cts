@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AiConversation, AiGenerateRequest, AiProviderConfig, AiStreamChunk, AppSettings, BatchUpdateCellRequest, DbConnectionConfig, DbmindApi, ExecuteSqlRequest, PreviewSqlRequest, UpdateCellRequest } from '../src/shared/types.js';
+import type { AiConversation, AiGenerateRequest, AiOptimizeRequest, AiProviderConfig, AppSettings, BatchUpdateCellRequest, DbConnectionConfig, DbmindApi, ExecuteSqlRequest, PreviewSqlRequest, UpdateCellRequest } from '../src/shared/types.js';
 
 const api: DbmindApi = {
   getConnections: () => ipcRenderer.invoke('connections:list'),
@@ -9,7 +9,10 @@ const api: DbmindApi = {
   listDatabases: (config: DbConnectionConfig) => ipcRenderer.invoke('db:databases', config),
   getSchema: (connectionId: string, database?: string) => ipcRenderer.invoke('db:schema', connectionId, database),
   getTableDdl: (connectionId: string, tableName: string, database?: string) => ipcRenderer.invoke('db:table-ddl', connectionId, tableName, database),
-  runQuery: (connectionId: string, sql: string, database?: string) => ipcRenderer.invoke('db:query', connectionId, sql, database),
+  runQuery: (connectionId: string, sql: string, database?: string) => {
+    console.log('[preload runQuery] sql:', sql?.slice(0, 80), '| db:', database);
+    return ipcRenderer.invoke('db:query', String(connectionId), String(sql), database != null ? String(database) : undefined);
+  },
   updateCell: (request: UpdateCellRequest) => ipcRenderer.invoke('db:update-cell', request),
   updateCellsBatch: (request: BatchUpdateCellRequest) => ipcRenderer.invoke('db:update-cells-batch', request),
   getTableDesign: (connectionId: string, database: string, table: string) => ipcRenderer.invoke('db:table-design:get', connectionId, database, table),
@@ -21,21 +24,7 @@ const api: DbmindApi = {
   saveSettings: (settings: AppSettings) => ipcRenderer.invoke('settings:save', settings),
   testAiProvider: (config: AiProviderConfig) => ipcRenderer.invoke('ai:test-provider', config),
   generateSql: (input: AiGenerateRequest) => ipcRenderer.invoke('ai:generate-sql', input),
-  generateSqlStream(input: AiGenerateRequest, onChunk: (chunk: AiStreamChunk) => void) {
-    return new Promise<void>((resolve) => {
-      const requestId = crypto.randomUUID();
-      const channel = `ai:stream-chunk:${requestId}`;
-      const handler = (_event: Electron.IpcRendererEvent, chunk: AiStreamChunk) => {
-        onChunk(chunk);
-        if (chunk.done || chunk.error) {
-          ipcRenderer.removeListener(channel, handler);
-          resolve();
-        }
-      };
-      ipcRenderer.on(channel, handler);
-      ipcRenderer.send('ai:generate-sql-stream', { requestId, input });
-    });
-  },
+  optimizeSql: (input: AiOptimizeRequest) => ipcRenderer.invoke('ai:optimize-sql', input),
   listAiConversations: () => ipcRenderer.invoke('ai:list-conversations'),
   saveAiConversation: (conv: AiConversation) => ipcRenderer.invoke('ai:save-conversation', conv),
   deleteAiConversation: (id: string) => ipcRenderer.invoke('ai:delete-conversation', id),

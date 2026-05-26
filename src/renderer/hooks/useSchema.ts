@@ -100,15 +100,18 @@ export function useSchema({
   const selectedSchema = useMemo(() => {
     if (!selectedTable) return undefined;
     const { db, table } = parseTableKey(selectedTable);
-    if (db) return schemaMap[db]?.find((t) => t.name === table);
-    return allTables.find((t) => t.name === table);
+    if (db) {
+      const dbKey = Object.keys(schemaMap).find((k) => k.toLowerCase() === db.toLowerCase());
+      return dbKey ? schemaMap[dbKey]?.find((t) => t.name.toLowerCase() === table.toLowerCase()) : undefined;
+    }
+    return allTables.find((t) => t.name.toLowerCase() === table.toLowerCase());
   }, [allTables, schemaMap, selectedTable]);
   const selectedSchemaDb = useMemo(() => {
     if (!selectedTable) return undefined;
     const { db, table } = parseTableKey(selectedTable);
     if (db) return db;
     for (const [dbName, tables] of Object.entries(schemaMap)) {
-      if (tables.some((t) => t.name === table)) return dbName;
+      if (tables.some((t) => t.name.toLowerCase() === table.toLowerCase())) return dbName;
     }
     return undefined;
   }, [selectedTable, schemaMap]);

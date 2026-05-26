@@ -118,10 +118,36 @@ export interface QueryHistoryItem {
   createdAt: string;
 }
 
+export interface AiHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AiTableDdl {
+  database?: string;
+  table: string;
+  ddl: string;
+}
+
 export interface AiGenerateRequest {
   prompt: string;
   dialect: DatabaseDriver;
   tables: TableSchema[];
+  tableDdls?: AiTableDdl[];
+  history?: AiHistoryMessage[];
+}
+
+export interface AiOptimizeRequest {
+  sql: string;
+  dialect: DatabaseDriver;
+  tables: TableSchema[];
+}
+
+export interface AiOptimizeResponse {
+  sql: string;
+  explanation: string;
+  source: 'openai' | 'openai-compatible' | 'local';
+  warnings: string[];
 }
 
 export interface AiGenerateResponse {
@@ -130,17 +156,6 @@ export interface AiGenerateResponse {
   usedTables: string[];
   source: 'openai' | 'openai-compatible' | 'local';
   warnings: string[];
-}
-
-export interface AiStreamChunk {
-  token?: string;
-  done?: boolean;
-  sql?: string;
-  explanation?: string;
-  source?: 'openai' | 'openai-compatible' | 'local';
-  usedTables?: string[];
-  warnings?: string[];
-  error?: string;
 }
 
 export interface ChatMessage {
@@ -236,7 +251,6 @@ export interface AiProviderConfig {
   temperature?: number;
   maxOutputTokens?: number;
   timeoutMs?: number;
-  streaming?: boolean;
   defaultDialect?: DatabaseDriver;
   allowWriteSql?: boolean;
   appendLimit?: boolean;
@@ -269,7 +283,7 @@ export interface DbmindApi {
   saveSettings(settings: AppSettings): Promise<AppSettings>;
   testAiProvider(config: AiProviderConfig): Promise<{ ok: boolean; message: string }>;
   generateSql(input: AiGenerateRequest): Promise<AiGenerateResponse>;
-  generateSqlStream(input: AiGenerateRequest, onChunk: (chunk: AiStreamChunk) => void): Promise<void>;
+  optimizeSql(input: AiOptimizeRequest): Promise<AiOptimizeResponse>;
   listAiConversations(): Promise<AiConversation[]>;
   saveAiConversation(conversation: AiConversation): Promise<AiConversation[]>;
   deleteAiConversation(id: string): Promise<AiConversation[]>;

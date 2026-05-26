@@ -25,6 +25,7 @@
 }
 table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-family: "SFMono-Regular", Consolas, monospace;
@@ -102,12 +103,153 @@ thead tr:first-child th {
 .column-sort.active em {
   color: var(--accent);
 }
+.result-grid {
+  height: 100%;
+  overflow: auto;
+  background: var(--panel-solid);
+  contain: strict;
+  cursor: grab;
+  outline: none;
+}
+.result-grid:focus-visible {
+  box-shadow: inset 0 0 0 1px rgba(79, 70, 229, 0.45);
+}
+.result-grid[data-dragging="true"] {
+  cursor: grabbing;
+  user-select: none;
+}
+body.result-grid-resizing,
+body.result-grid-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+.result-grid-row {
+  position: relative;
+  width: var(--result-grid-total-width);
+  min-width: 100%;
+}
+.result-grid-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: var(--result-grid-header-height);
+  min-width: 100%;
+  background: var(--bg3);
+}
+.result-grid-body {
+  position: relative;
+  min-width: 100%;
+}
+.result-grid-data-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 41px;
+  min-width: 100%;
+  contain: layout paint style;
+  will-change: transform;
+}
+.result-grid-row-even .result-grid-cell,
+.result-grid-row-even .cell-editable,
+.result-grid-row-even .cell-readonly {
+  background: rgba(255, 255, 255, 0.018);
+}
+.result-grid-head,
+.result-grid-cell,
+.result-grid .cell-editable,
+.result-grid .cell-readonly {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 41px;
+  min-width: 0;
+  padding: 9px 14px;
+  overflow: hidden;
+  color: #c9c9d8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.result-grid-head {
+  color: var(--muted);
+  background: var(--bg3);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 750;
+  will-change: transform;
+}
+.result-grid-column-head {
+  padding-right: 6px;
+}
+.result-grid-index-head,
+.result-grid-index-cell {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  width: var(--result-grid-index-width);
+  height: 41px;
+  color: var(--dim);
+  text-align: right;
+  background: var(--bg2);
+  user-select: none;
+}
+.result-grid-index-cell {
+  z-index: 2;
+  background: var(--bg);
+}
+.result-grid .cell-editable {
+  cursor: grab;
+}
+.result-grid .cell-editable:hover {
+  background: rgba(15, 183, 165, 0.08);
+}
+.result-grid .cell-selected,
+.result-grid .cell-selected:hover {
+  background: rgba(79, 70, 229, 0.16);
+}
+.result-grid .cell-active {
+  box-shadow: inset 0 0 0 2px rgba(45, 212, 191, 0.78);
+}
+.result-grid .cell-readonly {
+  cursor: grab;
+}
+.result-grid .cell-editing,
+.result-grid .cell-editing *,
+.result-grid button {
+  cursor: auto;
+}
+.result-grid .cell-edited {
+  background: rgba(45, 212, 191, 0.14);
+}
+.result-grid .cell-edited:hover {
+  background: rgba(45, 212, 191, 0.22);
+}
+.result-grid .cell-editing {
+  overflow: visible;
+  padding: 5px 7px;
+  box-shadow: inset 0 0 0 1px rgba(79, 70, 229, 0.36);
+}
+.column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  width: 12px;
+  height: 100%;
+  cursor: col-resize;
+}
+.column-resize-handle:hover::after {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  right: 2px;
+  width: 1px;
+  content: "";
+  background: var(--accent);
+}
 td { color: #c9c9d8; }
 tbody tr:nth-child(even) td {
   background: rgba(255, 255, 255, 0.018);
-}
-tbody tr:hover td {
-  background: rgba(91, 77, 255, 0.055);
 }
 td.cell-editable {
   cursor: cell;
@@ -142,7 +284,7 @@ td.cell-editing {
   text-overflow: ellipsis;
 }
 .cell-copy-btn {
-  display: none;
+  display: grid;
   width: 22px;
   height: 22px;
   place-items: center;
@@ -150,9 +292,15 @@ td.cell-editing {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
   border-radius: 5px;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
 }
-td:hover .cell-copy-btn {
-  display: grid;
+td:hover .cell-copy-btn,
+.result-grid [data-cell]:hover .cell-copy-btn {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
 }
 .cell-copy-btn:hover {
   color: var(--text);

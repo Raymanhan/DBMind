@@ -457,10 +457,41 @@ export const SqlEditor = memo(function SqlEditor({
 
     editorRef.current = editor;
 
-    // Format SQL (Ctrl/Cmd+Shift+F)
+    // Localize context menu to Chinese
+    const zhLabels: Record<string, string> = {
+      'editor.action.clipboardCutAction': '剪切',
+      'editor.action.clipboardCopyAction': '复制',
+      'editor.action.clipboardPasteAction': '粘贴',
+      'editor.action.selectAll': '全选',
+      'editor.action.undo': '撤销',
+      'editor.action.redo': '重做',
+      'editor.action.commentLine': '切换注释',
+      'editor.action.blockComment': '切换块注释',
+      'editor.action.indentLines': '缩进',
+      'editor.action.outdentLines': '减少缩进',
+      'editor.action.find': '查找',
+      'editor.action.replace': '替换',
+      'editor.action.quickCommand': '命令面板',
+      'editor.action.changeAll': '更改所有匹配项',
+      'editor.action.formatDocument': '格式化文档',
+      'editor.action.wordWrap': '自动换行',
+    };
+    const allActions = (editor as unknown as { getActions?: () => { id: string; label: string }[] }).getActions?.()
+      ?? (editor as unknown as { getSupportedActions?: () => { id: string; label: string }[] }).getSupportedActions?.()
+      ?? [];
+    for (const action of allActions) {
+      if (zhLabels[action.id]) {
+        action.label = zhLabels[action.id];
+      }
+    }
+    editor.updateOptions({ contextmenu: true });
+
+    // Format SQL context menu
     editor.addAction({
-      id: 'dbmind.formatSql',
+      id: 'dbmind.formatSqlInContext',
       label: '格式化 SQL',
+      contextMenuGroupId: '9_cutcopypaste',
+      contextMenuOrder: 2,
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF],
       run: (ed) => {
         const model = ed.getModel();
@@ -468,7 +499,7 @@ export const SqlEditor = memo(function SqlEditor({
         try {
           const formatted = formatSql(model.getValue(), { language: 'mysql', tabWidth: 2 });
           ed.executeEdits('format', [{ range: model.getFullModelRange(), text: formatted }]);
-        } catch { /* invalid SQL, ignore */ }
+        } catch { /* ignore */ }
       }
     });
 
