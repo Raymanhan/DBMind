@@ -86,7 +86,7 @@ jobs:
           find artifacts -type f \( -name '*.dmg' -o -name '*.AppImage' -o \( -name '*Setup*.exe' \) \) -exec mv {} . \;
           ls -lh *.dmg *Setup*.exe *.AppImage 2>/dev/null
 
-      - name: Publish Release
+      - name: Publish Release & Remove Source Archives
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
@@ -111,5 +111,15 @@ jobs:
               --notes "Automated build. See [releases](https://github.com/Raymanhan/DBMind/releases) for details." \
               --draft=false
           fi
+
+          # GitHub automatically attaches Source code archives to every Release.
+          # Delete them since the source is in a private repo.
+          echo "Removing source code archives..."
+          ASSET_IDS=$(gh api "repos/Raymanhan/DBMind/releases/tags/$VERSION" --jq '.assets[] | select(.name | test("Source code")) | .id')
+          for id in $ASSET_IDS; do
+            echo "  Deleting source asset $id..."
+            gh api --silent -X DELETE "repos/Raymanhan/DBMind/releases/assets/$id"
+          done
+          echo "Done."
         env:
           GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
