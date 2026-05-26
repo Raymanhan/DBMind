@@ -56,7 +56,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p upload
-          find release -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \) -exec cp {} upload/ \;
+          find release -type f \( -name '*.dmg' -o -name '*.AppImage' -o \( -name '*.exe' -a -name '*Setup*' \) \) -exec cp {} upload/ \;
           ls -lh upload/
 
       - name: Upload artifact
@@ -83,8 +83,8 @@ jobs:
 
       - name: Flatten artifacts
         run: |
-          find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \) -exec mv {} . \;
-          ls -lh *.dmg *.exe *.AppImage 2>/dev/null
+          find artifacts -type f \( -name '*.dmg' -o -name '*.AppImage' -o \( -name '*Setup*.exe' \) \) -exec mv {} . \;
+          ls -lh *.dmg *Setup*.exe *.AppImage 2>/dev/null
 
       - name: Publish Release
         run: |
