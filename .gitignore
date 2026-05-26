@@ -1,0 +1,5 @@
+# 只提交 README / LICENSE / .gitignore
+*
+!README.md
+!LICENSE
+!.gitignore
