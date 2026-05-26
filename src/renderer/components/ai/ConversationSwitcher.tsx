@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 
 import type { AiConversation } from '../../../shared/types';
@@ -12,15 +13,15 @@ interface ConversationSwitcherProps {
   onClearAll: () => void;
 }
 
-function relativeTime(iso: string): string {
+function relativeTime(iso: string, t: (key: string, options?: Record<string, unknown>) => string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return '刚刚';
-  if (minutes < 60) return `${minutes}分钟前`;
+  if (minutes < 1) return t('time.justNow');
+  if (minutes < 60) return t('time.minutesAgo', { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}小时前`;
+  if (hours < 24) return t('time.hoursAgo', { count: hours });
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}天前`;
+  if (days < 30) return t('time.daysAgo', { count: days });
   return new Date(iso).toLocaleDateString();
 }
 
@@ -32,11 +33,12 @@ export function ConversationSwitcher({
   onDelete,
   onClearAll
 }: ConversationSwitcherProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const active = conversations.find((c) => c.id === activeId);
-  const title = active?.title ?? '新对话';
+  const title = active?.title ?? t('ai.newConversationTitle');
 
   useEffect(() => {
     if (!open) return;
@@ -54,7 +56,7 @@ export function ConversationSwitcher({
 
   return (
     <div className="conversation-switcher" ref={ref}>
-      <button className="new-conv-btn" title="新建对话" onClick={onCreateNew}><Plus size={14} /></button>
+      <button className="new-conv-btn" title={t('ai.newConversation')} onClick={onCreateNew}><Plus size={14} /></button>
       <button
         className="conv-title-btn"
         title={title}
@@ -66,14 +68,14 @@ export function ConversationSwitcher({
       {open && (
         <div className="conv-dropdown">
           <div className="conv-dropdown-header">
-            <span>历史会话</span>
+            <span>{t('ai.conversationHistory')}</span>
             {conversations.length > 0 && (
-              <button onClick={() => { onClearAll(); setOpen(false); }}>清空全部</button>
+              <button onClick={() => { onClearAll(); setOpen(false); }}>{t('ai.clearAll')}</button>
             )}
           </div>
           {conversations.length === 0 ? (
             <div className="conv-item" style={{ color: 'var(--dim)', cursor: 'default' }}>
-              暂无历史会话
+              {t('ai.noConversations')}
             </div>
           ) : (
             conversations.map((conv) => (
@@ -85,12 +87,12 @@ export function ConversationSwitcher({
                 <div className="conv-item-main">
                   <strong>{conv.title}</strong>
                   <span className="conv-item-meta">
-                    {conv.messages.filter((m) => m.role !== 'assistant' || m.content).length} 条消息 · {relativeTime(conv.updatedAt)}
+                    {t('ai.messageCount', { count: conv.messages.filter((m) => m.role !== 'assistant' || m.content).length })} · {relativeTime(conv.updatedAt, t)}
                   </span>
                 </div>
                 <span
                   className="conv-delete-btn"
-                  title="删除"
+                  title={t('settings.delete')}
                   onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
                   role="button"
                   tabIndex={0}

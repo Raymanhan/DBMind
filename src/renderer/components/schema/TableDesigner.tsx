@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Save, Wand2 } from 'lucide-react';
 import type {
   DbmindApi,
@@ -29,6 +30,7 @@ export function TableDesignerModal({
   onClose: () => void;
   onApplied: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [original, setOriginal] = useState<TableDesign | null>(null);
   const [draft, setDraft] = useState<TableDesign | null>(null);
   const [previewSql, setPreviewSql] = useState('');
@@ -47,7 +49,7 @@ export function TableDesignerModal({
         setPreviewSql('');
       })
       .catch((error) => {
-        onNotice(error instanceof Error ? error.message : '表设计读取失败');
+        onNotice(error instanceof Error ? error.message : t('designer.loadFailed'));
         onClose();
       })
       .finally(() => mounted && setLocalLoading(false));
@@ -112,10 +114,10 @@ export function TableDesignerModal({
     setLocalLoading(true);
     try {
       const sql = await api.previewTableDesign({ connectionId, change: { original, draft } });
-      setPreviewSql(sql || '-- 没有需要执行的结构变更');
+      setPreviewSql(sql || `-- ${t('designer.noChanges')}`);
       return sql;
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : '生成 ALTER SQL 失败');
+      onNotice(error instanceof Error ? error.message : t('designer.previewFailed'));
       return '';
     } finally {
       setLocalLoading(false);
@@ -130,17 +132,17 @@ export function TableDesignerModal({
     try {
       const response = await api.applyTableDesign({ connectionId, change: { original, draft }, sql });
       await onApplied();
-      onNotice(response.message ?? '表结构已更新');
+      onNotice(response.message ?? t('designer.updated'));
       onClose();
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : '表结构变更失败');
+      onNotice(error instanceof Error ? error.message : t('designer.applyFailed'));
     } finally {
       onLoading(false);
     }
   }
 
   function requestClose() {
-    if (dirty && !window.confirm('表设计有未应用的修改，确定关闭吗？')) return;
+    if (dirty && !window.confirm(t('designer.confirmClose'))) return;
     onClose();
   }
 
@@ -149,32 +151,32 @@ export function TableDesignerModal({
       <div className="modal-content table-designer-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-head">
           <div>
-            <h2>表设计器 · {target.database}.{target.table}</h2>
-            <p>{dirty ? '有未应用的结构修改。生成 ALTER SQL 后再确认执行。' : '结构修改会先生成 ALTER SQL，确认后执行。'}</p>
+            <h2>{t('designer.title')} · {target.database}.{target.table}</h2>
+            <p>{dirty ? t('designer.dirtyDescription') : t('designer.cleanDescription')}</p>
           </div>
           <button className="icon-btn" onClick={requestClose}>✕</button>
         </div>
         {!draft ? (
-          <div className="empty-state"><span className="spinner" /> 正在读取表结构...</div>
+          <div className="empty-state"><span className="spinner" /> {t('designer.loading')}</div>
         ) : (
           <div className="designer-body">
             <section className="designer-section">
               <div className="designer-section-head">
-                <h3>字段</h3>
-                <button onClick={addColumn}><Plus size={14} /> 新增字段</button>
+                <h3>{t('designer.columns')}</h3>
+                <button onClick={addColumn}><Plus size={14} /> {t('designer.addColumn')}</button>
               </div>
               <div className="design-table-wrap">
                 <table className="design-table">
                   <thead>
                     <tr>
-                      <th>字段名</th>
-                      <th>类型</th>
-                      <th>可空</th>
-                      <th>主键</th>
-                      <th>自增</th>
-                      <th>默认值</th>
-                      <th>注释</th>
-                      <th>删除</th>
+                      <th>{t('designer.columnName')}</th>
+                      <th>{t('designer.type')}</th>
+                      <th>{t('designer.nullable')}</th>
+                      <th>{t('designer.primaryKey')}</th>
+                      <th>{t('designer.autoIncrement')}</th>
+                      <th>{t('designer.defaultValue')}</th>
+                      <th>{t('designer.comment')}</th>
+                      <th>{t('settings.delete')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -187,7 +189,7 @@ export function TableDesignerModal({
                         <td><input type="checkbox" checked={Boolean(column.autoIncrement)} onChange={(event) => updateColumn(index, { autoIncrement: event.target.checked })} /></td>
                         <td><input value={column.defaultValue ?? ''} onChange={(event) => updateColumn(index, { defaultValue: event.target.value })} /></td>
                         <td><input value={column.comment ?? ''} onChange={(event) => updateColumn(index, { comment: event.target.value })} /></td>
-                        <td><button className="text-danger" onClick={() => updateColumn(index, { dropped: !column.dropped })}>{column.dropped ? '恢复' : '删除'}</button></td>
+                        <td><button className="text-danger" onClick={() => updateColumn(index, { dropped: !column.dropped })}>{column.dropped ? t('designer.restore') : t('settings.delete')}</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -198,33 +200,33 @@ export function TableDesignerModal({
             <section className="designer-grid">
               <div className="designer-section">
                 <div className="designer-section-head">
-                  <h3>索引</h3>
+                  <h3>{t('designer.indexes')}</h3>
                   <div>
-                    <button onClick={() => addIndex(false)}>普通</button>
-                    <button onClick={() => addIndex(true)}>唯一</button>
+                    <button onClick={() => addIndex(false)}>{t('designer.normal')}</button>
+                    <button onClick={() => addIndex(true)}>{t('designer.unique')}</button>
                   </div>
                 </div>
                 {draft.indexes.map((index, i) => (
                   <div className={`designer-row ${index.dropped ? 'marked-drop' : ''}`} key={`${index.originalName ?? index.name}-${i}`}>
                     <input value={index.name} onChange={(event) => updateIndex(i, { name: event.target.value })} />
-                    <label><input type="checkbox" checked={Boolean(index.unique)} onChange={(event) => updateIndex(i, { unique: event.target.checked })} /> 唯一</label>
-                    <input value={index.columns.join(', ')} placeholder="字段，逗号分隔" onChange={(event) => updateIndex(i, { columns: splitColumnList(event.target.value) })} />
-                    <button className="text-danger" onClick={() => updateIndex(i, { dropped: !index.dropped })}>{index.dropped ? '恢复' : '删除'}</button>
+                    <label><input type="checkbox" checked={Boolean(index.unique)} onChange={(event) => updateIndex(i, { unique: event.target.checked })} /> {t('designer.unique')}</label>
+                    <input value={index.columns.join(', ')} placeholder={t('designer.columnsPlaceholder')} onChange={(event) => updateIndex(i, { columns: splitColumnList(event.target.value) })} />
+                    <button className="text-danger" onClick={() => updateIndex(i, { dropped: !index.dropped })}>{index.dropped ? t('designer.restore') : t('settings.delete')}</button>
                   </div>
                 ))}
               </div>
 
               <div className="designer-section">
                 <div className="designer-section-head">
-                  <h3>外键</h3>
-                  <button onClick={addForeignKey}>新增外键</button>
+                  <h3>{t('designer.foreignKeys')}</h3>
+                  <button onClick={addForeignKey}>{t('designer.addForeignKey')}</button>
                 </div>
                 {draft.foreignKeys.map((fk, i) => (
                   <div className={`designer-row fk-row ${fk.dropped ? 'marked-drop' : ''}`} key={`${fk.originalName ?? fk.name}-${i}`}>
                     <input value={fk.name} onChange={(event) => updateForeignKey(i, { name: event.target.value })} />
-                    <input value={fk.columns.join(', ')} placeholder="本表字段" onChange={(event) => updateForeignKey(i, { columns: splitColumnList(event.target.value) })} />
-                    <input value={fk.referencedTable} placeholder="引用表" onChange={(event) => updateForeignKey(i, { referencedTable: event.target.value })} />
-                    <input value={fk.referencedColumns.join(', ')} placeholder="引用字段" onChange={(event) => updateForeignKey(i, { referencedColumns: splitColumnList(event.target.value) })} />
+                    <input value={fk.columns.join(', ')} placeholder={t('designer.localColumns')} onChange={(event) => updateForeignKey(i, { columns: splitColumnList(event.target.value) })} />
+                    <input value={fk.referencedTable} placeholder={t('designer.referencedTable')} onChange={(event) => updateForeignKey(i, { referencedTable: event.target.value })} />
+                    <input value={fk.referencedColumns.join(', ')} placeholder={t('designer.referencedColumns')} onChange={(event) => updateForeignKey(i, { referencedColumns: splitColumnList(event.target.value) })} />
                     <select value={fk.onUpdate ?? ''} onChange={(event) => updateForeignKey(i, { onUpdate: event.target.value })}>
                       <option value="">ON UPDATE</option>
                       <option value="RESTRICT">RESTRICT</option>
@@ -239,14 +241,14 @@ export function TableDesignerModal({
                       <option value="SET NULL">SET NULL</option>
                       <option value="NO ACTION">NO ACTION</option>
                     </select>
-                    <button className="text-danger" onClick={() => updateForeignKey(i, { dropped: !fk.dropped })}>{fk.dropped ? '恢复' : '删除'}</button>
+                    <button className="text-danger" onClick={() => updateForeignKey(i, { dropped: !fk.dropped })}>{fk.dropped ? t('designer.restore') : t('settings.delete')}</button>
                   </div>
                 ))}
               </div>
             </section>
 
             <section className="designer-section">
-              <div className="designer-section-head"><h3>表属性</h3></div>
+              <div className="designer-section-head"><h3>{t('designer.tableProperties')}</h3></div>
               <div className="settings-grid compact">
                 <label>Engine<input value={draft.engine ?? ''} onChange={(event) => { setDraft({ ...draft, engine: event.target.value }); setPreviewSql(''); }} /></label>
                 <label>Collation<input value={draft.collation ?? ''} onChange={(event) => { setDraft({ ...draft, collation: event.target.value }); setPreviewSql(''); }} /></label>
@@ -256,13 +258,13 @@ export function TableDesignerModal({
 
             <section className="designer-section">
               <div className="designer-section-head">
-                <h3>DDL 预览</h3>
+                <h3>{t('designer.ddlPreview')}</h3>
                 <div>
-                  <button onClick={preview} disabled={busy}><Wand2 size={14} /> {localLoading ? '生成中' : '生成 ALTER'}</button>
-                  <button className="primary" onClick={apply} disabled={busy || !draft || !dirty}><Save size={14} /> {loading ? '执行中' : '确认执行'}</button>
+                  <button onClick={preview} disabled={busy}><Wand2 size={14} /> {localLoading ? t('designer.generating') : t('designer.generateAlter')}</button>
+                  <button className="primary" onClick={apply} disabled={busy || !draft || !dirty}><Save size={14} /> {loading ? t('topbar.running') : t('designer.confirmExecute')}</button>
                 </div>
               </div>
-              <pre className="sql-preview">{previewSql || '点击“生成 ALTER”预览将要执行的结构变更。'}</pre>
+              <pre className="sql-preview">{previewSql || t('designer.previewHint')}</pre>
             </section>
           </div>
         )}

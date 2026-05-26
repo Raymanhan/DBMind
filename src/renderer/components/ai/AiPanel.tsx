@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Bot, Check, ChevronDown, Copy, Settings, Sparkles } from 'lucide-react';
 import type { AiConversation, ChatMessage, TableSchema } from '../../../shared/types';
 import { ConversationSwitcher } from './ConversationSwitcher';
@@ -66,6 +67,7 @@ export const AiPanel = memo(function AiPanel({
   onClearAllConversations: () => void;
   onNavigateToSettings: () => void;
 }) {
+  const { t } = useTranslation();
   const mentionListRef = useRef<HTMLDivElement>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
@@ -88,7 +90,7 @@ export const AiPanel = memo(function AiPanel({
   if (collapsed) {
     return (
       <aside className="ai-panel collapsed">
-        <button className="ai-collapsed-btn" title="展开 AI 助手" onClick={onToggleCollapsed}>
+        <button className="ai-collapsed-btn" title={t('ai.expand')} onClick={onToggleCollapsed}>
           <Sparkles size={18} />
           <span>AI</span>
         </button>
@@ -102,7 +104,7 @@ export const AiPanel = memo(function AiPanel({
       <div className="ai-panel-body">
       <div className="ai-head">
         <div>
-          <p><Bot size={16} /> AI 助手</p>
+          <p><Bot size={16} /> {t('ai.title')}</p>
           <ConversationSwitcher
             conversations={conversations}
             activeId={activeConversationId}
@@ -112,7 +114,7 @@ export const AiPanel = memo(function AiPanel({
             onClearAll={onClearAllConversations}
           />
         </div>
-        <button className="icon-btn" title="收起 AI 助手" onClick={onToggleCollapsed}><ChevronDown size={16} /></button>
+        <button className="icon-btn" title={t('ai.collapse')} onClick={onToggleCollapsed}><ChevronDown size={16} /></button>
       </div>
 
       <div className="chat-list">
@@ -125,7 +127,7 @@ export const AiPanel = memo(function AiPanel({
                 <div className="sql-block-header">
                   <span>SQL</span>
                   <button className="sql-copy-btn" onClick={() => copySql(index, message.sql!)}>
-                    {copiedIndex === index ? <><Check size={12} /> 已复制</> : <><Copy size={12} /> 复制</>}
+                    {copiedIndex === index ? <><Check size={12} /> {t('result.cellCopied')}</> : <><Copy size={12} /> {t('ai.copySql')}</>}
                   </button>
                 </div>
                 <pre>{message.sql}</pre>
@@ -136,8 +138,8 @@ export const AiPanel = memo(function AiPanel({
         ))}
         {aiLoading && (
           <div className="chat-message assistant loading-message">
-            <div className="meta">AI 助手</div>
-            <p><span className="spinner" /> 正在生成 SQL...</p>
+            <div className="meta">{t('ai.title')}</div>
+            <p><span className="spinner" /> {t('ai.generating')}</p>
           </div>
         )}
       </div>
@@ -147,7 +149,7 @@ export const AiPanel = memo(function AiPanel({
           <textarea
             ref={textareaRef}
             value={aiInput}
-            placeholder="使用 @ 引用表结构，描述查询需求..."
+            placeholder={t('ai.placeholder')}
             onChange={(event) => onInput(event.target.value)}
             onKeyDown={onKeyDown}
           />
@@ -169,9 +171,9 @@ export const AiPanel = memo(function AiPanel({
           )}
         </div>
         <div className="composer-footer">
-          <span>{mentionedTables.length ? `已引用 ${mentionedTables.join(', ')}` : '输入 @ 引用表'}</span>
-          <button className="ai-settings-btn" onClick={onNavigateToSettings} title="AI 设置"><Settings size={14} /></button>
-          <button className="ai-generate-btn" onClick={onGenerate} disabled={busy || !aiInput.trim()}><Sparkles size={15} /> {aiLoading ? '生成中' : '生成 SQL'}</button>
+          <span>{mentionedTables.length ? t('ai.referencedTables', { tables: mentionedTables.join(', ') }) : t('ai.inputMention')}</span>
+          <button className="ai-settings-btn" onClick={onNavigateToSettings} title={t('ai.settings')}><Settings size={14} /></button>
+          <button className="ai-generate-btn" onClick={onGenerate} disabled={busy || !aiInput.trim()}><Sparkles size={15} /> {aiLoading ? t('ai.generating') : t('ai.generate')}</button>
         </div>
       </div>
       </div>

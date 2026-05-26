@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { BatchCellEditEntry, BatchUpdateCellRequest, DbmindApi, TableSchema } from '../../shared/types';
 import type { BatchCellEdit } from '../components/result/BatchEditToolbar';
 import type { SqlConfirmData } from '../components/modals/SqlConfirmModal';
@@ -26,6 +27,7 @@ export function useBatchEdit({
   onRefreshResult: () => void;
   getCellEditBlockReason: (row: Record<string, unknown>, column: string) => string | null;
 }) {
+  const { t } = useTranslation();
   const [activeInlineEditor, setActiveInlineEditor] = useState<{
     rowIndex: number; column: string; value: string; asNull: boolean;
   } | null>(null);
@@ -93,7 +95,7 @@ export function useBatchEdit({
     try {
       const preview = await api.updateCellsBatch(request);
       setPendingSqlConfirm({
-        title: `批量更新确认 · ${edits.length} 处修改`,
+        title: t('dataEdit.batchConfirmTitle', { count: edits.length }),
         sql: preview.sqls.join('\n'),
         onConfirm: async () => {
           setLoadingFlag('query', true);
@@ -102,18 +104,18 @@ export function useBatchEdit({
             setPendingSqlConfirm(null);
             setPendingEdits([]);
             onRefreshResult();
-            setNotice('批量更新完成');
+            setNotice(t('dataEdit.batchComplete'));
           } catch (error) {
-            setNotice(error instanceof Error ? error.message : '批量更新失败');
+            setNotice(error instanceof Error ? error.message : t('dataEdit.batchFailed'));
           } finally {
             setLoadingFlag('query', false);
           }
         }
       });
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '生成批量更新 SQL 失败');
+      setNotice(error instanceof Error ? error.message : t('dataEdit.batchPreviewFailed'));
     }
-  }, [pendingEdits, activeResult, dbName, tableName, tableSchema, activeConnectionId, api, setLoadingFlag, setNotice, onRefreshResult]);
+  }, [pendingEdits, activeResult, dbName, tableName, tableSchema, activeConnectionId, api, setLoadingFlag, setNotice, onRefreshResult, t]);
 
   return {
     activeInlineEditor, setActiveInlineEditor,

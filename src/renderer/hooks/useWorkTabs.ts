@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { DbmindApi, QueryHistoryItem, TableSchema, WorkTab } from '../../shared/types';
 import { mysqlTableRef, quoteMysqlIdentifier } from '../../shared/sql/identifiers';
 
@@ -101,6 +102,7 @@ export function useWorkTabs({
   setNotice: (msg: string) => void;
   setLoadingFlag: (k: 'query', v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [workTabs, setWorkTabs] = useState<WorkTab[]>([createConsoleTab()]);
   const [activeWorkTabId, setActiveWorkTabId] = useState('console');
   const [queryHistory, setQueryHistory] = useState<QueryHistoryItem[]>([]);
@@ -149,7 +151,7 @@ export function useWorkTabs({
 
   const runWorkTabQuery = useCallback(async (tabId: string = activeWorkTabId, sqlOverride?: string) => {
     const tab = workTabs.find((item) => item.id === tabId);
-    if (!tab || !activeConnectionId) { setNotice('请先保存并选择一个数据库连接。'); return; }
+    if (!tab || !activeConnectionId) { setNotice(t('notice.needConnection')); return; }
     setLoadingFlag('query', true);
     setNotice('');
     const targetDb = tab.dbName ?? (selectedDbs.length === 1 ? selectedDbs[0] : undefined);
@@ -159,7 +161,7 @@ export function useWorkTabs({
     let step = 0;
     try {
       if (statements.length === 0) {
-        setNotice('没有可执行的 SQL。');
+        setNotice(t('notice.noRunnableSql'));
         return;
       }
       for (; step < statements.length; step++) {
@@ -167,25 +169,25 @@ export function useWorkTabs({
         const data = await api.runQuery(activeConnectionId, sql, targetDb);
         lastResult = data;
         if (statements.length > 1) {
-          setNotice(`${step + 1}/${statements.length} · ${data.rowCount} 行 · ${data.durationMs}ms`);
+          setNotice(t('notice.progress', { current: step + 1, total: statements.length, rows: data.rowCount, ms: data.durationMs }));
         }
       }
       updateWorkTab(tabId, { result: lastResult, resultTab: 'results' });
       api.getQueryHistory().then(setQueryHistory).catch(() => undefined);
       if (statements.length > 1) {
-        setNotice(`${statements.length} 条语句全部执行完成，最后一条 ${lastResult?.rowCount ?? 0} 行 · ${lastResult?.durationMs ?? 0}ms`);
+        setNotice(t('notice.allComplete', { count: statements.length, rows: lastResult?.rowCount ?? 0, ms: lastResult?.durationMs ?? 0 }));
       } else {
-        setNotice(`执行完成：${lastResult?.rowCount ?? 0} 行 · ${lastResult?.durationMs ?? 0}ms`);
+        setNotice(t('notice.queryComplete', { rows: lastResult?.rowCount ?? 0, ms: lastResult?.durationMs ?? 0 }));
       }
     } catch (error) {
       console.error('[runWorkTabQuery] error:', error, 'step:', step, 'sql type:', typeof statements[step], 'value:', String(statements[step]).slice(0, 100));
       updateWorkTab(tabId, { result: lastResult, resultTab: 'results' });
-      const errMsg = error instanceof Error ? error.message : '查询失败';
-      setNotice(statements.length > 1 ? `第 ${step + 1}/${statements.length} 条出错：${errMsg}` : errMsg);
+      const errMsg = error instanceof Error ? error.message : t('notice.queryFailed');
+      setNotice(statements.length > 1 ? t('notice.statementFailed', { current: step + 1, total: statements.length, error: errMsg }) : errMsg);
     } finally {
       setLoadingFlag('query', false);
     }
-  }, [workTabs, activeWorkTabId, activeConnectionId, selectedDbs, api, setNotice, setLoadingFlag, updateWorkTab]);
+  }, [workTabs, activeWorkTabId, activeConnectionId, selectedDbs, api, setNotice, setLoadingFlag, updateWorkTab, t]);
 
   const openTableTab = useCallback((dbName: string, table: TableSchema, autoRun = true) => {
     const id = `table:${activeConnectionId}:${dbName}:${table.name}`;
@@ -199,18 +201,18 @@ export function useWorkTabs({
     if (autoRun) {
       setLoadingFlag('query', true);
       api.runQuery(activeConnectionId, sql, dbName)
-        .then((data) => { updateWorkTab(id, { result: data, resultTab: 'results' }); setNotice(`已打开 ${dbName}.${table.name}：${data.rowCount} 行 · ${data.durationMs}ms`); return api.getQueryHistory(); })
+        .then((data) => { updateWorkTab(id, { result: data, resultTab: 'results' }); setNotice(t('notice.tableOpened', { table: `${dbName}.${table.name}`, rows: data.rowCount, ms: data.durationMs })); return api.getQueryHistory(); })
         .then(setQueryHistory)
-        .catch((error) => setNotice(error instanceof Error ? error.message : '表数据浏览失败'))
+        .catch((error) => setNotice(error instanceof Error ? error.message : t('notice.tableDataFailed')))
         .finally(() => setLoadingFlag('query', false));
     }
-  }, [activeConnectionId, buildTableBaseSql, api, setNotice, setLoadingFlag, updateWorkTab]);
+  }, [activeConnectionId, buildTableBaseSql, api, setNotice, setLoadingFlag, updateWorkTab, t]);
 
   const clearHistory = useCallback(async () => {
     const next = await api.clearQueryHistory();
     setQueryHistory(next);
-    setNotice('查询历史已清空');
-  }, [api, setNotice]);
+    setNotice(t('history.cleared'));
+  }, [api, setNotice, t]);
 
   return {
     workTabs, setWorkTabs, activeWorkTabId, setActiveWorkTabId, queryHistory,

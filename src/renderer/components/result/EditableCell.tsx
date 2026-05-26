@@ -1,5 +1,6 @@
 import {memo, useEffect, useMemo, useRef, useState, type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
+import {useTranslation} from 'react-i18next';
 import {Check, Copy, Maximize2, X} from 'lucide-react';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
 import 'monaco-editor/esm/vs/language/json/monaco.contribution';
@@ -144,6 +145,7 @@ function FloatingCellEditor({
   onCommit: (next: InlineCellEditorState) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [value, setValue] = useState(() => kind === 'json' ? prettyJson(state.value) : state.value);
   const [asNull, setAsNull] = useState(state.asNull);
 
@@ -161,9 +163,9 @@ function FloatingCellEditor({
         <div className="cell-popover-head">
           <div>
             <strong>{title}</strong>
-            <span>{kind === 'json' ? 'JSON 编辑器' : '多行文本编辑'}</span>
+            <span>{kind === 'json' ? t('dataEdit.jsonEditor') : t('dataEdit.multilineEditor')}</span>
           </div>
-          <button type="button" onClick={onCancel} title="取消">
+          <button type="button" onClick={onCancel} title={t('connection.cancel')}>
             <X size={14}/>
           </button>
         </div>
@@ -186,9 +188,9 @@ function FloatingCellEditor({
         )}
         <div className="cell-popover-actions">
           <button type="button" className={asNull ? 'active' : ''} onClick={() => setAsNull(true)}>NULL</button>
-          <button type="button" onClick={onCancel}>取消</button>
+          <button type="button" onClick={onCancel}>{t('connection.cancel')}</button>
           <button type="button" className="primary" onClick={commit}>
-            <Check size={14}/> 应用
+            <Check size={14}/> {t('dataEdit.apply')}
           </button>
         </div>
       </div>
@@ -218,6 +220,7 @@ export const EditableCell = memo(function EditableCell({
   className,
   style
 }: EditableCellProps) {
+  const { t } = useTranslation();
   const isEditing = editorState?.rowIndex === rowIndex && editorState.column === column;
   const editorKind = useMemo(() => inferEditorKind(columnSchema, pendingEdit ? pendingEdit.newValue : value), [columnSchema, pendingEdit, value]);
   const tdClass = [
@@ -246,7 +249,7 @@ export const EditableCell = memo(function EditableCell({
       data-column={column}
       role={as === 'div' ? 'gridcell' : undefined}
       style={style}
-      title={reason ?? (pendingEdit ? '已修改，双击重新编辑' : '双击编辑')}
+      title={reason ?? (pendingEdit ? t('dataEdit.editedHint') : t('dataEdit.doubleClickEdit'))}
     >
       {isEditing && editorState ? (
         <>
@@ -254,7 +257,7 @@ export const EditableCell = memo(function EditableCell({
             <>
               <button type="button" className="cell-open-popover" onClick={() => onBeginEdit?.()}>
                 <Maximize2 size={13}/>
-                {editorKind === 'json' ? 'JSON 编辑中' : '长文本编辑中'}
+                {editorKind === 'json' ? t('dataEdit.jsonEditing') : t('dataEdit.longTextEditing')}
               </button>
               <FloatingCellEditor
                 title={column}
@@ -267,8 +270,8 @@ export const EditableCell = memo(function EditableCell({
             </>
           ) : editorKind === 'binary' ? (
             <div className="cell-editor-shell cell-editor-readonly">
-              <span>二进制字段暂不支持行内编辑</span>
-              <button type="button" onClick={onCancel}>关闭</button>
+              <span>{t('dataEdit.binaryUnsupported')}</span>
+              <button type="button" onClick={onCancel}>{t('dataEdit.close')}</button>
             </div>
           ) : (
             <div className="cell-editor-shell">
@@ -301,7 +304,7 @@ export const EditableCell = memo(function EditableCell({
                   className={editorState.asNull ? 'active' : ''}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => onCommit({...editorState, value: '', asNull: true})}
-                  title="保存为 NULL"
+                  title={t('dataEdit.saveAsNull')}
                 >
                   NULL
                 </button>
@@ -309,7 +312,7 @@ export const EditableCell = memo(function EditableCell({
                   type="button"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => onCommit(editorState)}
-                  title="应用"
+                  title={t('dataEdit.apply')}
                 >
                   <Check size={12}/>
                 </button>
@@ -327,7 +330,7 @@ export const EditableCell = memo(function EditableCell({
               event.stopPropagation();
               onCopy?.();
             }}
-            title="复制单元格"
+            title={t('result.copyCell')}
           >
             <Copy size={11}/>
           </button>

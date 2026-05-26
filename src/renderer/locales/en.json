@@ -18,7 +18,12 @@
     "filterDb": "Filter databases...",
     "noTables": "No tables found",
     "confirmDeleteTitle": "Delete Connection",
-    "confirmDeleteMsg": "Delete connection «{name}»? This cannot be undone."
+    "confirmDeleteMsg": "Delete connection «{name}»? This cannot be undone.",
+    "notConnected": "Not connected",
+    "objects": "Objects",
+    "selectedDatabases": "{ count } selected",
+    "selectDatabaseToBrowse": "Select a database to browse objects",
+    "createConnectionFirst": "Create a connection first"
   },
   "topbar": {
     "sqlConsole": "SQL Console",
@@ -48,13 +53,42 @@
     "optimizing": "Optimizing...",
     "optimized": "SQL Optimization",
     "optimizeFailed": "SQL optimization failed",
-    "ddlLoaded": "DDL loaded for { table }"
+    "ddlLoaded": "DDL loaded for { table }",
+    "newConversationTitle": "New conversation",
+    "expand": "Expand AI Assistant",
+    "collapse": "Collapse AI Assistant",
+    "referencedTables": "Referenced { tables }",
+    "inputMention": "Type @ to reference tables",
+    "conversationHistory": "Conversation history",
+    "noConversations": "No conversations yet",
+    "messageCount": "{ count } messages",
+    "ddlMissing": "No complete DDL was loaded for { table }",
+    "ddlInjected": "{ source } · Full DDL injected: { tables }",
+    "optimizedBy": "{ source } · SQL Optimization",
+    "generateFailed": "AI generation failed"
   },
   "editor": {
     "runSelection": "Run Selected SQL",
     "formatSql": "Format SQL",
     "empty": "Execute SQL to see results here.",
-    "selectConnection": "Select a connection to start."
+    "selectConnection": "Select a connection to start.",
+    "cut": "Cut",
+    "copy": "Copy",
+    "paste": "Paste",
+    "selectAll": "Select All",
+    "undo": "Undo",
+    "redo": "Redo",
+    "commentLine": "Toggle Line Comment",
+    "blockComment": "Toggle Block Comment",
+    "indent": "Indent",
+    "outdent": "Outdent",
+    "find": "Find",
+    "replace": "Replace",
+    "commandPalette": "Command Palette",
+    "changeAll": "Change All Occurrences",
+    "formatDocument": "Format Document",
+    "wordWrap": "Word Wrap",
+    "runStatement": "Run statement"
   },
   "result": {
     "results": "Results",
@@ -70,7 +104,14 @@
     "saving": "Saving...",
     "changes": "changes",
     "cellCopied": "Cell copied",
-    "copyFailed": "Copy failed"
+    "copyFailed": "Copy failed",
+    "changeCount": "{ count } changes",
+    "undoOne": "Undo this change",
+    "downloadCsv": "Download CSV",
+    "asc": "ascending",
+    "desc": "descending",
+    "copyCell": "Copy cell",
+    "resizeColumn": "Resize { column } column"
   },
   "settings": {
     "title": "Settings",
@@ -147,7 +188,12 @@
     "savedNoDb": "Connection saved, please select a database",
     "selectDbAfterSave": "Select database after saving",
     "mysql": "MySQL",
-    "postgres": "PostgreSQL"
+    "postgres": "PostgreSQL",
+    "requiredHint": "is required",
+    "testing": "Testing...",
+    "saveFailed": "Failed to save connection",
+    "editing": "Editing connection: { name }",
+    "selectFirst": "Please select a connection first"
   },
   "history": {
     "title": "Query History",
@@ -156,7 +202,9 @@
     "empty": "No query history",
     "sourceQuery": "Query",
     "sourceDataEdit": "Data Edit",
-    "sourceSchemaEdit": "Schema Edit"
+    "sourceSchemaEdit": "Schema Edit",
+    "emptyDescription": "No query history yet. The latest 200 queries are recorded automatically after execution.",
+    "recentCount": "Recent { count } queries"
   },
   "table": {
     "selectTemplate": "SELECT 100",
@@ -175,7 +223,22 @@
     "viewNotEditable": "Views cannot be edited",
     "noPrimaryKey": "Table has no primary key, cannot safely identify rows",
     "missingPk": "Primary key columns missing from result set",
-    "pkNotEditable": "Primary key columns cannot be edited directly"
+    "pkNotEditable": "Primary key columns cannot be edited directly",
+    "batchConfirmTitle": "Batch update confirmation · { count } changes",
+    "batchComplete": "Batch update complete",
+    "batchFailed": "Batch update failed",
+    "batchPreviewFailed": "Failed to generate batch update SQL",
+    "jsonEditor": "JSON editor",
+    "multilineEditor": "Multiline text editor",
+    "apply": "Apply",
+    "editedHint": "Edited, double-click to edit again",
+    "doubleClickEdit": "Double-click to edit",
+    "jsonEditing": "Editing JSON",
+    "longTextEditing": "Editing long text",
+    "binaryUnsupported": "Binary fields cannot be edited inline yet",
+    "close": "Close",
+    "saveAsNull": "Save as NULL",
+    "sqlConfirmNote": "After confirmation, the following write SQL will run and the current result set will refresh automatically."
   },
   "notice": {
     "queryComplete": "Query complete: { rows } rows · { ms }ms",
@@ -198,6 +261,51 @@
     "schemaRefreshFailed": "Failed to refresh schema for { db }",
     "dbSelectFailed": "Failed to save database selection",
     "noOptimizableSql": "No SQL to optimize.",
-    "unknown": "Unknown error"
+    "unknown": "Unknown error",
+    "noRunnableSql": "No runnable SQL.",
+    "tableOpened": "Opened { table }: { rows } rows · { ms }ms"
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{ count } minutes ago",
+    "hoursAgo": "{ count } hours ago",
+    "daysAgo": "{ count } days ago"
+  },
+  "designer": {
+    "title": "Table Designer",
+    "confirmClose": "There are unapplied table design changes. Close anyway?",
+    "dirtyDescription": "There are unapplied structure changes. Generate ALTER SQL before confirming execution.",
+    "cleanDescription": "Structure changes generate ALTER SQL first, then run after confirmation.",
+    "loading": "Loading table structure...",
+    "columns": "Columns",
+    "addColumn": "Add Column",
+    "columnName": "Column Name",
+    "type": "Type",
+    "nullable": "Nullable",
+    "primaryKey": "Primary Key",
+    "autoIncrement": "Auto Increment",
+    "defaultValue": "Default",
+    "comment": "Comment",
+    "restore": "Restore",
+    "indexes": "Indexes",
+    "normal": "Normal",
+    "unique": "Unique",
+    "columnsPlaceholder": "Columns, comma-separated",
+    "foreignKeys": "Foreign Keys",
+    "addForeignKey": "Add Foreign Key",
+    "localColumns": "Local columns",
+    "referencedTable": "Referenced table",
+    "referencedColumns": "Referenced columns",
+    "tableProperties": "Table Properties",
+    "ddlPreview": "DDL Preview",
+    "generating": "Generating...",
+    "generateAlter": "Generate ALTER",
+    "confirmExecute": "Confirm Execute",
+    "previewHint": "Click “Generate ALTER” to preview the structure changes.",
+    "loadFailed": "Failed to load table design",
+    "noChanges": "No structure changes to execute",
+    "previewFailed": "Failed to generate ALTER SQL",
+    "updated": "Table structure updated",
+    "applyFailed": "Failed to apply table changes"
   }
 }

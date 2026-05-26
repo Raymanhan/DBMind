@@ -27,7 +27,7 @@ export function initI18n(language: string) {
     resources: { en: { translation: en }, 'zh-CN': { translation: zhCN }, 'zh-TW': { translation: zhTW }, ru: { translation: ru }, ja: { translation: ja }, ko: { translation: ko }, fr: { translation: fr }, de: { translation: de } },
     lng: language,
     fallbackLng: 'en',
-    interpolation: { escapeValue: false },
+    interpolation: { escapeValue: false, prefix: '{', suffix: '}' },
     returnObjects: false,
   });
   return i18n;

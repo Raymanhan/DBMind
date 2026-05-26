@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, Circle, Database, Edit3, History, Plus, RefreshCw, Search, Settings, Sparkles, Table2, Trash2 } from 'lucide-react';
 import type { DatabaseInfo, DbConnectionConfig, TableSchema } from '../../../shared/types';
 
@@ -77,6 +78,7 @@ export const Sidebar = memo(function Sidebar({
   onNavigate: (v: string) => void;
   onToggleAi: () => void;
 }) {
+  const { t } = useTranslation();
   const selectedObjectsCount = selectedDbs.reduce((total, dbName) => total + (schemaMap[dbName]?.length ?? 0), 0);
 
   return (
@@ -85,17 +87,17 @@ export const Sidebar = memo(function Sidebar({
         <span className="brand-text">DB<span className="brand-accent">Mind</span></span>
         <div className="panel-title">
           <span><Circle size={6} fill="currentColor" /></span>
-          <strong>{activeConnection?.name ?? '未连接'}</strong>
+          <strong>{activeConnection?.name ?? t('sidebar.notConnected')}</strong>
           <span>{activeConnection ? (activeConnection.driver === 'postgres' ? 'PG' : 'MySQL') : ''}</span>
         </div>
-        <button className="icon-btn" title="新建连接" onClick={onNewConnection}><Plus size={15} /></button>
+        <button className="icon-btn" title={t('sidebar.newConnection')} onClick={onNewConnection}><Plus size={15} /></button>
       </div>
 
       <div className="connection-list">
         {connections.length === 0 ? (
           <button className="sidebar-empty-action" onClick={onNewConnection}>
             <Plus size={15} />
-            新建连接
+            {t('sidebar.newConnection')}
           </button>
         ) : connections.map((c) => (
           <div className={`connection-item ${c.id === activeConnectionId ? 'active' : ''}`} key={c.id}>
@@ -105,8 +107,8 @@ export const Sidebar = memo(function Sidebar({
               <em>{c.driver === 'postgres' ? 'PostgreSQL' : 'MySQL'}</em>
             </button>
             <div className="row-actions">
-              <button title="编辑连接" onClick={() => onEditConnection(c)}><Edit3 size={13} /></button>
-              <button title="删除连接" onClick={() => onDeleteConnection(c.id)}><Trash2 size={13} /></button>
+              <button title={t('sidebar.editConnection')} onClick={() => onEditConnection(c)}><Edit3 size={13} /></button>
+              <button title={t('sidebar.deleteConnection')} onClick={() => onDeleteConnection(c.id)}><Trash2 size={13} /></button>
             </div>
           </div>
         ))}
@@ -114,7 +116,7 @@ export const Sidebar = memo(function Sidebar({
 
       <div className="object-browser">
         <div className="section-title-row">
-          <div className="section-label">对象</div>
+          <div className="section-label">{t('sidebar.objects')}</div>
           <span className="section-count">{selectedObjectsCount}</span>
         </div>
         {activeConnection?.driver === 'mysql' && databases.length > 0 && (
@@ -122,15 +124,15 @@ export const Sidebar = memo(function Sidebar({
             <button className="db-selector-head" onClick={onToggleDbSelector}>
               <ChevronDown size={14} className={`tree-chevron ${showDbSelector ? '' : 'open'}`} />
               <Database size={14} />
-              <span>{selectedDbs.length ? `已选 ${selectedDbs.length} 个库` : '选择数据库'}</span>
-              <span className="tiny-btn" onClick={(e) => { e.stopPropagation(); onRefreshSchemas(); }} title="刷新 Schema"><RefreshCw size={13} /></span>
+              <span>{selectedDbs.length ? t('sidebar.selectedDatabases', { count: selectedDbs.length }) : t('sidebar.selectDatabase')}</span>
+              <span className="tiny-btn" onClick={(e) => { e.stopPropagation(); onRefreshSchemas(); }} title={t('sidebar.refresh')}><RefreshCw size={13} /></span>
             </button>
             {showDbSelector && (
               <div className="db-multi-dropdown">
                 <div className="db-filter">
                   <Search size={13} />
-                  <input placeholder="筛选数据库" value={dbFilter} onChange={(e) => onDbFilterChange(e.target.value)} onClick={(e) => e.stopPropagation()} />
-                  {selectedDbs.length > 0 && <button onClick={onClearSelection}>清空</button>}
+                  <input placeholder={t('sidebar.filterDb')} value={dbFilter} onChange={(e) => onDbFilterChange(e.target.value)} onClick={(e) => e.stopPropagation()} />
+                  {selectedDbs.length > 0 && <button onClick={onClearSelection}>{t('sidebar.clearAll')}</button>}
                 </div>
                 <div className="db-option-list">
                   {filteredDatabases.map((db) => (
@@ -146,11 +148,11 @@ export const Sidebar = memo(function Sidebar({
         )}
         <div className="searchbox">
           <Search size={14} />
-          <input placeholder="搜索对象" value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} onClick={(e) => e.stopPropagation()} />
+          <input placeholder={t('sidebar.search')} value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} onClick={(e) => e.stopPropagation()} />
           {searchQuery && <button className="search-clear" onClick={onClearSearch}>✕</button>}
         </div>
         {selectedDbs.length === 0 && !searchQuery && (
-          <div className="tree-empty">{activeConnection ? '选择数据库以浏览对象' : '先新建连接'}</div>
+          <div className="tree-empty">{activeConnection ? t('sidebar.selectDatabaseToBrowse') : t('sidebar.createConnectionFirst')}</div>
         )}
         {selectedDbs.map((dbName) => {
           const tables = searchQuery ? (dbTreeFiltered?.[dbName] ?? []) : schemaMap[dbName];
@@ -184,10 +186,10 @@ export const Sidebar = memo(function Sidebar({
         })}
       </div>
       <div className="sidebar-footer">
-        <button className={`footer-btn ${view === 'workspace' ? 'active' : ''}`} title="数据库" onClick={() => onNavigate('workspace')}><Database size={15} /></button>
-        <button className={`footer-btn ${view === 'workspace' && !aiCollapsed ? 'active' : ''}`} title="AI 助手" onClick={onToggleAi}><Sparkles size={15} /></button>
-        <button className="footer-btn" title="历史"><History size={15} /></button>
-        <button className={`footer-btn ${view === 'settings' ? 'active' : ''}`} title="设置" onClick={() => onNavigate('settings')}><Settings size={15} /></button>
+        <button className={`footer-btn ${view === 'workspace' ? 'active' : ''}`} title={t('sidebar.database')} onClick={() => onNavigate('workspace')}><Database size={15} /></button>
+        <button className={`footer-btn ${view === 'workspace' && !aiCollapsed ? 'active' : ''}`} title={t('ai.title')} onClick={onToggleAi}><Sparkles size={15} /></button>
+        <button className="footer-btn" title={t('history.title')}><History size={15} /></button>
+        <button className={`footer-btn ${view === 'settings' ? 'active' : ''}`} title={t('settings.title')} onClick={() => onNavigate('settings')}><Settings size={15} /></button>
       </div>
       <div className="resize-handle-col" onMouseDown={(e) => onStartResize('sidebar', sidebarWidth, e)} />
     </aside>

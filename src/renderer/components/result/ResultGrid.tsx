@@ -1,4 +1,5 @@
 import {memo, useCallback, type CSSProperties, type MouseEvent} from 'react';
+import {useTranslation} from 'react-i18next';
 import type {ColumnSchema, WorkTab} from '../../../shared/types';
 import {EditableCell, type InlineCellEditorState} from './EditableCell';
 import {
@@ -136,6 +137,7 @@ export function ResultGrid({
   onCancel,
   onCopyCell
 }: ResultGridProps) {
+  const { t } = useTranslation();
   const {viewport, viewportRef, setViewportRef, onScroll} = useResultGridViewport();
   const {isDragging, onMouseDown} = useResultGridDragScroll(viewportRef);
   const {columnWidths, startColumnResize} = useResultGridColumnSizing(columns);
@@ -239,7 +241,7 @@ export function ResultGrid({
               className="column-resize-handle"
               role="separator"
               aria-orientation="vertical"
-              aria-label={`调整 ${virtualColumn.name} 列宽`}
+              aria-label={t('result.resizeColumn', { column: virtualColumn.name })}
               onMouseDown={(event) => startColumnResize(event, virtualColumn.name)}
             />
           </div>

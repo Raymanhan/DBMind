@@ -1,4 +1,5 @@
 import { Save } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export interface SqlConfirmData {
   title: string;
@@ -15,6 +16,7 @@ export function SqlConfirmModal({
   loading: boolean;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   if (!data) return null;
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -23,12 +25,12 @@ export function SqlConfirmModal({
           <h2>{data.title}</h2>
           <button className="icon-btn" onClick={onClose}>✕</button>
         </div>
-        <p className="modal-note">确认后会执行以下写入 SQL，执行成功后自动刷新当前结果集。</p>
+        <p className="modal-note">{t('dataEdit.sqlConfirmNote')}</p>
         <pre className="sql-preview">{data.sql}</pre>
         <div className="form-actions">
-          <button onClick={onClose}>取消</button>
+          <button onClick={onClose}>{t('connection.cancel')}</button>
           <button className="primary" onClick={data.onConfirm} disabled={loading}>
-            <Save size={14} /> {loading ? '执行中' : '确认执行'}
+            <Save size={14} /> {loading ? t('topbar.running') : t('designer.confirmExecute')}
           </button>
         </div>
       </div>

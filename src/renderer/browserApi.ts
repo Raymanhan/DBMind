@@ -75,8 +75,15 @@ let settings: AppSettings = {
   ]
 };
 
+function previewText(zh: string, en: string): string {
+  return settings.language === 'zh-CN' || settings.language === 'zh-TW' ? zh : en;
+}
+
 function browserOnlyError(): Error {
-  return new Error('请使用 Electron 桌面应用连接数据库；浏览器预览不会访问本机数据库或保存敏感配置。');
+  return new Error(previewText(
+    '请使用 Electron 桌面应用连接数据库；浏览器预览不会访问本机数据库或保存敏感配置。',
+    'Use the Electron desktop app to connect to databases. Browser preview does not access local databases or save sensitive configuration.'
+  ));
 }
 
 export const browserFallbackApi: DbmindApi = {
@@ -117,7 +124,7 @@ export const browserFallbackApi: DbmindApi = {
         count: [128, 96, 74, 63, 51, 47, 38, 29, 21, 15][index],
         tenant_id: `tenant_${String(index + 1).padStart(3, '0')}`,
         profile: JSON.stringify({ tier: index < 3 ? 'vip' : 'standard', active: true, score: 100 - index }),
-        memo: `这是一段用于验证长文本编辑器的备注内容。第 ${index + 1} 行包含较长文本，避免窄列行内输入时出现挤压或换行。`,
+        memo: previewText(`这是一段用于验证长文本编辑器的备注内容。第 ${index + 1} 行包含较长文本，避免窄列行内输入时出现挤压或换行。`, `Long text editor preview content. Row ${index + 1} contains longer text to validate narrow-cell editing.`),
         updated_at: '2024-05-23 16:48:21'
       })),
       rowCount: 10,
@@ -157,13 +164,13 @@ export const browserFallbackApi: DbmindApi = {
     return settings;
   },
   async testAiProvider() {
-    return { ok: false, message: '请在 Electron 桌面应用中测试 AI 配置。' };
+    return { ok: false, message: previewText('请在 Electron 桌面应用中测试 AI 配置。', 'Use the Electron desktop app to test AI configuration.') };
   },
   async generateSql(input: AiGenerateRequest): Promise<AiGenerateResponse> {
     const sql = addLimitIfSelect(localSqlFromPrompt(input.prompt, input.tables, input.dialect));
     return {
       sql,
-      explanation: '浏览器预览仅验证界面；桌面应用会使用设置页中的 AI Provider。',
+      explanation: previewText('浏览器预览仅验证界面；桌面应用会使用设置页中的 AI Provider。', 'Browser preview only validates the interface. The desktop app uses the AI Provider configured in Settings.'),
       usedTables: input.tables.map((table) => table.name),
       source: 'local',
       warnings: validateSql(sql)
@@ -172,7 +179,7 @@ export const browserFallbackApi: DbmindApi = {
   async optimizeSql(input: AiOptimizeRequest): Promise<AiOptimizeResponse> {
     return {
       sql: input.sql,
-      explanation: '浏览器预览不支持 AI 优化；桌面应用会使用设置页中的 AI Provider 进行 SQL 优化。',
+      explanation: previewText('浏览器预览不支持 AI 优化；桌面应用会使用设置页中的 AI Provider 进行 SQL 优化。', 'Browser preview does not support AI optimization. The desktop app uses the AI Provider configured in Settings for SQL optimization.'),
       source: 'local',
       warnings: validateSql(input.sql)
     };

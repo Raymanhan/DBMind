@@ -1,4 +1,5 @@
 import { KeyRound, Save } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { DatabaseInfo, DbConnectionConfig } from '../../../shared/types';
 
 export function ConnectionForm({
@@ -16,10 +17,11 @@ export function ConnectionForm({
   onSave: () => void;
   onTest: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="connection-form">
       <div className="form-row">
-        <span className="field-required"><input placeholder="连接名" value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></span>
+        <span className="field-required"><input placeholder={t('connection.name')} value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} /></span>
         <select
           value={draft.driver}
           onChange={(event) =>
@@ -40,7 +42,7 @@ export function ConnectionForm({
       </div>
       {databases.length > 0 ? (
         <select value={draft.database} onChange={(event) => onChange({ ...draft, database: event.target.value })}>
-          <option value="">选择数据库</option>
+          <option value="">{t('sidebar.selectDatabase')}</option>
           {databases.map((database) => (
             <option key={database.name} value={database.name}>{database.system ? `${database.name} · system` : database.name}</option>
           ))}
@@ -58,12 +60,12 @@ export function ConnectionForm({
       </div>
       <label className="check-row">
         <input type="checkbox" checked={Boolean(draft.readonly)} onChange={(event) => onChange({ ...draft, readonly: event.target.checked })} />
-        <span>只读模式</span>
+        <span>{t('connection.readonly')}</span>
       </label>
-      <p className="form-hint"><span className="required-mark">*</span> 为必填项</p>
+      <p className="form-hint"><span className="required-mark">*</span> {t('connection.requiredHint')}</p>
       <div className="form-actions">
-        <button onClick={onTest} disabled={loading}><KeyRound size={14} /> {loading ? '测试中' : '测试'}</button>
-        <button className="primary" onClick={onSave} disabled={loading}><Save size={14} /> {loading ? '保存中' : '保存'}</button>
+        <button onClick={onTest} disabled={loading}><KeyRound size={14} /> {loading ? t('connection.testing') : t('connection.test')}</button>
+        <button className="primary" onClick={onSave} disabled={loading}><Save size={14} /> {loading ? t('result.saving') : t('connection.save')}</button>
       </div>
     </div>
   );

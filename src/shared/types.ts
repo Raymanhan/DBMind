@@ -135,12 +135,14 @@ export interface AiGenerateRequest {
   tables: TableSchema[];
   tableDdls?: AiTableDdl[];
   history?: AiHistoryMessage[];
+  language?: string;
 }
 
 export interface AiOptimizeRequest {
   sql: string;
   dialect: DatabaseDriver;
   tables: TableSchema[];
+  language?: string;
 }
 
 export interface AiOptimizeResponse {

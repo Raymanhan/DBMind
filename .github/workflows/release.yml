@@ -100,15 +100,19 @@ jobs:
           echo "Found ${#FILES[@]} package(s):"
           printf '  %s\n' "${FILES[@]}"
 
+          # Generate release notes from the tag's commit message
+          NOTES=$(git log -1 --format='%B' "$GITHUB_SHA" 2>/dev/null || echo "DBMind $VERSION")
+
           if gh release view "$VERSION" --repo Raymanhan/DBMind > /dev/null 2>&1; then
             echo "Release $VERSION exists, uploading assets..."
             gh release upload "$VERSION" "${FILES[@]}" --repo Raymanhan/DBMind --clobber
+            gh release edit "$VERSION" --repo Raymanhan/DBMind --notes "$NOTES"
           else
             echo "Creating release $VERSION..."
             gh release create "$VERSION" "${FILES[@]}" \
               --repo Raymanhan/DBMind \
               --title "DBMind $VERSION" \
-              --notes "Automated build. See [releases](https://github.com/Raymanhan/DBMind/releases) for details." \
+              --notes "$NOTES" \
               --draft=false
           fi
 

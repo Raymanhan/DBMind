@@ -78,14 +78,28 @@ function buildDdlPrompt(input: AiGenerateRequest): string {
     .join('\n\n');
 }
 
+function languageName(language?: string): string {
+  const names: Record<string, string> = {
+    'zh-CN': '简体中文',
+    'zh-TW': '繁體中文',
+    en: 'English',
+    ru: 'Русский',
+    ja: '日本語',
+    ko: '한국어',
+    fr: 'Français',
+    de: 'Deutsch'
+  };
+  return names[language ?? ''] ?? language ?? '简体中文';
+}
+
 async function callAiProvider(input: AiGenerateRequest, provider: AiProviderConfig): Promise<string | null> {
   const apiKey = provider.apiKey || process.env.OPENAI_API_KEY;
   if (!apiKey && provider.provider !== 'ollama') return null;
 
-  const prompt = `数据库方言：${input.dialect}\n\n相关表完整 DDL:\n${buildDdlPrompt(input)}\n\n用户需求：${input.prompt}`;
+  const prompt = `回复语言：${languageName(input.language)}\n数据库方言：${input.dialect}\n\n相关表完整 DDL:\n${buildDdlPrompt(input)}\n\n用户需求：${input.prompt}`;
 
   const instructions =
-    '你是 DBMind 的 SQL 生成引擎。只返回 JSON：{"sql": "...", "explanation": "..."}。必须只使用给定 DDL 中的表和字段。SQL 中的表名必须与 DDL 中给出的完全一致（含反引号引用的库名和表名）。默认生成只读 SELECT，除非用户明确要求写操作且应用配置允许。';
+    `你是 DBMind 的 SQL 生成引擎。只返回 JSON：{"sql": "...", "explanation": "..."}。explanation 必须使用 ${languageName(input.language)}。必须只使用给定 DDL 中的表和字段。SQL 中的表名必须与 DDL 中给出的完全一致（含反引号引用的库名和表名）。默认生成只读 SELECT，除非用户明确要求写操作且应用配置允许。`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), provider.timeoutMs ?? 30000);
@@ -163,9 +177,9 @@ async function generateSql(input: AiGenerateRequest): Promise<AiGenerateResponse
 
 async function optimizeSql(input: AiOptimizeRequest): Promise<AiOptimizeResponse> {
   const instructions =
-    '你是 DBMind 的 SQL 优化引擎。分析给定的 SQL 语句并提供优化建议。只返回 JSON：{"sql": "优化后的 SQL", "explanation": "1. 潜在问题\\n2. 优化措施\\n3. 索引建议"}。保持 SQL 语义不变，仅优化性能、可读性和安全性。';
+    `你是 DBMind 的 SQL 优化引擎。分析给定的 SQL 语句并提供优化建议。只返回 JSON：{"sql": "优化后的 SQL", "explanation": "1. 潜在问题\\n2. 优化措施\\n3. 索引建议"}。explanation 必须使用 ${languageName(input.language)}。保持 SQL 语义不变，仅优化性能、可读性和安全性。`;
 
-  const prompt = `数据库方言：${input.dialect}\n\nSchema:\n${buildSchemaPrompt(input.tables, input.dialect)}\n\n原始 SQL：\n${input.sql}`;
+  const prompt = `回复语言：${languageName(input.language)}\n数据库方言：${input.dialect}\n\nSchema:\n${buildSchemaPrompt(input.tables, input.dialect)}\n\n原始 SQL：\n${input.sql}`;
 
   try {
     const settings = await readSettings();

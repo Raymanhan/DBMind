@@ -193,7 +193,7 @@ export function App() {
     }, [activeTableSchema]);
 
     const getCellEditBlockReason = useCallback((row: Record<string, unknown>, column: string): string | null => {
-        if (!activeConnection) return '请先选择连接';
+        if (!activeConnection) return t('connection.selectFirst');
         if (activeConnection.driver !== 'mysql' && activeConnection.driver !== 'postgres') return t('dataEdit.onlyMysqlPg');
         if (activeConnection.readonly) return t('dataEdit.readonly');
         if (activeWorkTab?.kind !== 'table' || !activeWorkTab.dbName || !activeWorkTab.tableName) return t('dataEdit.notTableTab');
@@ -252,7 +252,7 @@ export function App() {
     const clearSearch = useCallback(() => setSearchQuery(''), []);
     const clearSelection = useCallback(() => {
         setSelectedDbs([]);
-        if (activeConnectionId) saveSelectedDbs(activeConnectionId, []).catch(() => setNotice('数据库选择保存失败'));
+        if (activeConnectionId) saveSelectedDbs(activeConnectionId, []).catch(() => setNotice(t('notice.dbSelectFailed')));
     }, [activeConnectionId, saveSelectedDbs, setNotice]);
     const navigateTo = useCallback((v: string) => setView(v as AppView), []);
     const toggleAiCollapsed = useCallback(() => { setView('workspace'); setAiCollapsed((v) => !v); }, []);
@@ -278,7 +278,7 @@ export function App() {
     const closeTableDesigner = useCallback(() => setTableDesignerTarget(null), []);
     const browseTable = useCallback(() => {
         if (!selectedSchema) {
-            setNotice('请先选择一张表。');
+            setNotice(t('table.noTableSelected'));
             return;
         }
         openTableTab(selectedSchemaDb ?? selectedDbs[0] ?? activeConnection?.database ?? '', selectedSchema);
@@ -344,7 +344,7 @@ export function App() {
                 direction: 'asc' as const
             };
         updateActiveWorkTab({sort: nextSort, sql: composeSortedSql(activeWorkTab, nextSort)});
-        setNotice(nextSort ? `已按 ${column} ${nextSort.direction === 'asc' ? '升序' : '降序'} 更新 SQL` : `已取消 ${column} 排序`);
+        setNotice(nextSort ? t('notice.sortApplied', { column, direction: t(nextSort.direction === 'asc' ? 'result.asc' : 'result.desc') }) : t('notice.sortRemoved', { column }));
         setPendingEdits([]);
         setActiveInlineEditor(null);
         runWorkTabQuery(activeWorkTabId, composeSortedSql(activeWorkTab, nextSort));
@@ -352,7 +352,7 @@ export function App() {
 
     const exportResult = useCallback((format: 'csv' | 'json') => {
         if (!activeResult) {
-            setNotice('没有可导出的结果集。');
+            setNotice(t('notice.noExport'));
             return;
         }
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -369,7 +369,7 @@ export function App() {
         a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
-        setNotice(`已导出 ${filename}`);
+        setNotice(t('notice.exported', { file: filename }));
     }, [activeResult, setNotice]);
 
 
@@ -380,7 +380,7 @@ export function App() {
 
     const copyCellValue = useCallback((value: unknown) => {
         const text = value === null || value === undefined ? '' : String(value);
-        navigator.clipboard.writeText(text).then(() => setNotice('已复制单元格')).catch(() => setNotice('复制失败'));
+        navigator.clipboard.writeText(text).then(() => setNotice(t('result.cellCopied'))).catch(() => setNotice(t('result.copyFailed')));
     }, [setNotice]);
 
     const gridStyle = useMemo(() => ({
@@ -503,7 +503,7 @@ export function App() {
                                 <button onClick={() => exportResult('json')}><Braces size={14}/> {t('result.exportJson')}</button>
                                 <span>{activeResult ? `${activeResult.rowCount} rows · ${activeResult.durationMs}ms` : t('result.notExecuted')}</span>
                                 {isResultTruncated && <span className="result-note">{t('result.truncated', { count: visibleRows.length })}</span>}
-                                <button className="tabs-icon" onClick={() => exportResult('csv')} title="下载 CSV"><Download size={14}/></button>
+                                <button className="tabs-icon" onClick={() => exportResult('csv')} title={t('result.downloadCsv')}><Download size={14}/></button>
                             </div>
                             {pendingEdits.length > 0 && activeResultTab === 'results' && (
                                 <div className="batch-edit-toolbar">
@@ -513,7 +513,7 @@ export function App() {
                         {pendingEdits.length} {t('result.changes')}
                     </span>
                                         <div className="batch-edit-header-actions">
-                                            <button className="ghost" onClick={undoAllEdits} title="撤销所有修改">
+                                            <button className="ghost" onClick={undoAllEdits} title={t('result.undoAll')}>
                                                 <Trash2 size={13}/> {t('result.undoAll')}
                                             </button>
                                             <button className="primary" onClick={saveBatchEdits}
@@ -533,7 +533,7 @@ export function App() {
                                                 <button
                                                     className="batch-edit-undo"
                                                     onClick={() => undoEdit(edit.rowIndex, edit.column)}
-                                                    title="撤销此修改"
+                                                    title={t('result.undoOne')}
                                                 >
                                                     <Trash2 size={12}/>
                                                 </button>
@@ -577,14 +577,14 @@ export function App() {
                                         {!activeConnection ? (
                                             <>
                                                 <Database size={24}/>
-                                                <strong>连接数据库后开始工作</strong>
-                                                <span>保存 MySQL 或 PostgreSQL 连接后，表结构、SQL 和结果集会在这里联动。</span>
+                                                <strong>{t('sidebar.connectDatabase')}</strong>
+                                                <span>{t('sidebar.saveConnection')}</span>
                                                 <button className="run-btn" onClick={startNewConnection}><Plus
-                                                    size={15}/> 新建连接
+                                                    size={15}/> {t('sidebar.newConnection')}
                                                 </button>
                                             </>
                                         ) : (
-                                            '执行 SQL 后，结果会显示在这里。'
+                                            t('editor.empty')
                                         )}
                                     </div>
                                 )}

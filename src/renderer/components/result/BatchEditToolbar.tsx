@@ -1,4 +1,5 @@
 import { Edit3, Save, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export interface BatchCellEdit {
   rowIndex: number;
@@ -21,19 +22,20 @@ export function BatchEditToolbar({
   onUndoEdit: (rowIndex: number, column: string) => void;
   onSave: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="batch-edit-toolbar">
       <div className="batch-edit-header">
         <span className="batch-edit-count">
           <Edit3 size={14} />
-          {edits.length} 处修改
+          {t('result.changeCount', { count: edits.length })}
         </span>
         <div className="batch-edit-header-actions">
-          <button className="ghost" onClick={onUndoAll} title="撤销所有修改">
-            <Trash2 size={13} /> 全部撤销
+          <button className="ghost" onClick={onUndoAll} title={t('result.undoAll')}>
+            <Trash2 size={13} /> {t('result.undoAll')}
           </button>
           <button className="primary" onClick={onSave} disabled={saving}>
-            <Save size={14} /> {saving ? '保存中' : '保存'}
+            <Save size={14} /> {saving ? t('result.saving') : t('result.save')}
           </button>
         </div>
       </div>
@@ -44,7 +46,7 @@ export function BatchEditToolbar({
             <span className="batch-edit-old">{edit.originalValue || 'NULL'}</span>
             <span className="batch-edit-arrow">&rarr;</span>
             <span className="batch-edit-new">{edit.asNull ? 'NULL' : edit.newValue}</span>
-            <button className="batch-edit-undo" onClick={() => onUndoEdit(edit.rowIndex, edit.column)} title="撤销此修改">
+            <button className="batch-edit-undo" onClick={() => onUndoEdit(edit.rowIndex, edit.column)} title={t('result.undoOne')}>
               <Trash2 size={12} />
             </button>
           </div>

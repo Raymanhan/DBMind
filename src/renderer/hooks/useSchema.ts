@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AppSettings, DatabaseInfo, DbmindApi, TableSchema } from '../../shared/types';
 
 function parseTableKey(key: string): { db?: string; table: string } {
@@ -18,6 +19,7 @@ export function useSchema({
   settingsLoaded: boolean;
   setNotice: (msg: string) => void;
 }) {
+  const { t } = useTranslation();
   const [schemaMap, setSchemaMap] = useState<Record<string, TableSchema[]>>({});
   const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
   const [expandedDbs, setExpandedDbs] = useState<Set<string>>(new Set());
@@ -40,14 +42,14 @@ export function useSchema({
     setSelectedDbs((prev) => {
       if (prev.includes(dbName)) {
         const next = prev.filter((d) => d !== dbName);
-        saveSelectedDbs(activeConnectionId, next).catch(() => setNotice('数据库选择保存失败'));
+        saveSelectedDbs(activeConnectionId, next).catch(() => setNotice(t('notice.dbSelectFailed')));
         return next;
       }
       const next = [...prev, dbName];
-      saveSelectedDbs(activeConnectionId, next).catch(() => setNotice('数据库选择保存失败'));
+      saveSelectedDbs(activeConnectionId, next).catch(() => setNotice(t('notice.dbSelectFailed')));
       return next;
     });
-  }, [activeConnectionId, saveSelectedDbs, setNotice]);
+  }, [activeConnectionId, saveSelectedDbs, setNotice, t]);
 
   const toggleExpandDb = useCallback((dbName: string) => {
     setExpandedDbs((prev) => { const next = new Set(prev); if (next.has(dbName)) next.delete(dbName); else next.add(dbName); return next; });
@@ -59,9 +61,9 @@ export function useSchema({
       const items = await api.getSchema(activeConnectionId, dbName);
       setSchemaMap((prev) => ({ ...prev, [dbName]: items }));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : `${dbName} schema 读取失败`);
+      setNotice(error instanceof Error ? error.message : t('notice.schemaRefreshFailed', { db: dbName }));
     }
-  }, [api, activeConnectionId, setNotice]);
+  }, [api, activeConnectionId, setNotice, t]);
 
   const refreshAllSchemas = useCallback(async () => {
     for (const db of selectedDbs) await refreshDbSchema(db);

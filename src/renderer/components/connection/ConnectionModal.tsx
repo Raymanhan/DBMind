@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { ConnectionForm } from './ConnectionForm';
 import type { DatabaseInfo, DbConnectionConfig } from '../../../shared/types';
 
@@ -20,12 +21,13 @@ export function ConnectionModal({
   onSave: () => void;
   onTest: () => void;
 }) {
+  const { t } = useTranslation();
   if (!open) return null;
   return (
     <div className="modal-overlay">
       <div className="modal-content" onClick={(event) => event.stopPropagation()}>
         <div className="modal-head">
-          <h2>{connectionDraft.id ? '编辑连接' : '新建连接'}</h2>
+          <h2>{connectionDraft.id ? t('sidebar.editConnection') : t('sidebar.newConnection')}</h2>
           <button className="icon-btn" onClick={onClose}>✕</button>
         </div>
         <ConnectionForm

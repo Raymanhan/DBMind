@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { DatabaseInfo, DbConnectionConfig, DbmindApi } from '../../shared/types';
 
 export function useConnections({
@@ -10,6 +11,7 @@ export function useConnections({
   setNotice: (msg: string) => void;
   setLoadingFlag: (k: 'connection', v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [connections, setConnections] = useState<DbConnectionConfig[]>([]);
   const [activeConnectionId, setActiveConnectionId] = useState('');
   const [connectionDraft, setConnectionDraft] = useState<DbConnectionConfig>(emptyConnection);
@@ -39,23 +41,23 @@ export function useConnections({
       setConnectionDraft(draft);
       setActiveConnectionId(id);
       setShowConnectionModal(false);
-      setNotice(draft.database ? `连接已保存：${draft.database}` : '连接已保存，请选择数据库');
-    } catch (e) { setNotice(e instanceof Error ? e.message : '连接保存失败'); } finally { setLoadingFlag('connection', false); }
-  }, [connectionDraft, databases, api, driverLabel, setNotice, setLoadingFlag]);
+      setNotice(draft.database ? t('connection.savedWithDb', { db: draft.database }) : t('connection.savedNoDb'));
+    } catch (e) { setNotice(e instanceof Error ? e.message : t('connection.saveFailed')); } finally { setLoadingFlag('connection', false); }
+  }, [connectionDraft, databases, api, driverLabel, setNotice, setLoadingFlag, t]);
 
   const deleteConnection = useCallback(async (id: string) => {
     const next = await api.deleteConnection(id);
     setConnections(next);
     setActiveConnectionId(next[0]?.id ?? '');
     setConnectionDraft(emptyConnection);
-    setNotice('连接已删除');
-  }, [api, emptyConnection, setNotice]);
+    setNotice(t('connection.deleted'));
+  }, [api, emptyConnection, setNotice, t]);
 
   const editConnection = useCallback((c: DbConnectionConfig) => {
     setConnectionDraft({ ...emptyConnection, ...c });
     setShowConnectionModal(true);
-    setNotice(`正在编辑连接：${c.name}`);
-  }, [emptyConnection, setNotice]);
+    setNotice(t('connection.editing', { name: c.name }));
+  }, [emptyConnection, setNotice, t]);
 
   const testConnection = useCallback(async () => {
     setLoadingFlag('connection', true);
@@ -71,8 +73,8 @@ export function useConnections({
           if (firstUserDb) setConnectionDraft({ ...draft, database: firstUserDb.name });
         }
       }
-    } catch (e) { setNotice(e instanceof Error ? e.message : '连接测试失败'); } finally { setLoadingFlag('connection', false); }
-  }, [connectionDraft, api, setNotice, setLoadingFlag]);
+    } catch (e) { setNotice(e instanceof Error ? e.message : t('connection.testFailed')); } finally { setLoadingFlag('connection', false); }
+  }, [connectionDraft, api, setNotice, setLoadingFlag, t]);
 
   const startNewConnection = useCallback(() => {
     setConnectionDraft(emptyConnection);

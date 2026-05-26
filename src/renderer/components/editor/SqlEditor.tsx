@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution';
@@ -357,6 +358,7 @@ export const SqlEditor = memo(function SqlEditor({
   databaseNames?: string[];
   currentDb?: string;
 }) {
+  const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const valueRef = useRef(value);
@@ -457,31 +459,30 @@ export const SqlEditor = memo(function SqlEditor({
 
     editorRef.current = editor;
 
-    // Localize context menu to Chinese
-    const zhLabels: Record<string, string> = {
-      'editor.action.clipboardCutAction': '剪切',
-      'editor.action.clipboardCopyAction': '复制',
-      'editor.action.clipboardPasteAction': '粘贴',
-      'editor.action.selectAll': '全选',
-      'editor.action.undo': '撤销',
-      'editor.action.redo': '重做',
-      'editor.action.commentLine': '切换注释',
-      'editor.action.blockComment': '切换块注释',
-      'editor.action.indentLines': '缩进',
-      'editor.action.outdentLines': '减少缩进',
-      'editor.action.find': '查找',
-      'editor.action.replace': '替换',
-      'editor.action.quickCommand': '命令面板',
-      'editor.action.changeAll': '更改所有匹配项',
-      'editor.action.formatDocument': '格式化文档',
-      'editor.action.wordWrap': '自动换行',
+    const menuLabels: Record<string, string> = {
+      'editor.action.clipboardCutAction': t('editor.cut'),
+      'editor.action.clipboardCopyAction': t('editor.copy'),
+      'editor.action.clipboardPasteAction': t('editor.paste'),
+      'editor.action.selectAll': t('editor.selectAll'),
+      'editor.action.undo': t('editor.undo'),
+      'editor.action.redo': t('editor.redo'),
+      'editor.action.commentLine': t('editor.commentLine'),
+      'editor.action.blockComment': t('editor.blockComment'),
+      'editor.action.indentLines': t('editor.indent'),
+      'editor.action.outdentLines': t('editor.outdent'),
+      'editor.action.find': t('editor.find'),
+      'editor.action.replace': t('editor.replace'),
+      'editor.action.quickCommand': t('editor.commandPalette'),
+      'editor.action.changeAll': t('editor.changeAll'),
+      'editor.action.formatDocument': t('editor.formatDocument'),
+      'editor.action.wordWrap': t('editor.wordWrap'),
     };
     const allActions = (editor as unknown as { getActions?: () => { id: string; label: string }[] }).getActions?.()
       ?? (editor as unknown as { getSupportedActions?: () => { id: string; label: string }[] }).getSupportedActions?.()
       ?? [];
     for (const action of allActions) {
-      if (zhLabels[action.id]) {
-        action.label = zhLabels[action.id];
+      if (menuLabels[action.id]) {
+        action.label = menuLabels[action.id];
       }
     }
     editor.updateOptions({ contextmenu: true });
@@ -489,7 +490,7 @@ export const SqlEditor = memo(function SqlEditor({
     // Format SQL context menu
     editor.addAction({
       id: 'dbmind.formatSqlInContext',
-      label: '格式化 SQL',
+      label: t('editor.formatSql'),
       contextMenuGroupId: '9_cutcopypaste',
       contextMenuOrder: 2,
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF],
@@ -506,7 +507,7 @@ export const SqlEditor = memo(function SqlEditor({
     // Right-click: execute selected SQL
     editor.addAction({
       id: 'dbmind.runSelection',
-      label: '执行选中的 SQL',
+      label: t('editor.runSelection'),
       contextMenuGroupId: 'navigation',
       contextMenuOrder: 1.1,
       run: (ed) => {
@@ -596,7 +597,7 @@ export const SqlEditor = memo(function SqlEditor({
             range: new monaco.Range(i, 1, i, 1),
             options: {
               glyphMarginClassName: 'sql-run-glyph',
-              glyphMarginHoverMessage: { value: '执行语句' },
+              glyphMarginHoverMessage: { value: t('editor.runStatement') },
             },
           });
           isNewStatement = false;
@@ -628,7 +629,7 @@ export const SqlEditor = memo(function SqlEditor({
       editor.dispose();
       editorRef.current = null;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const provider = monaco.languages.registerCompletionItemProvider('sql', {
