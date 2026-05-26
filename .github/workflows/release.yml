@@ -73,6 +73,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -81,16 +84,7 @@ jobs:
       - name: Flatten artifacts
         run: |
           find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \) -exec mv {} . \;
-          ls -lh *.dmg *.exe *.AppImage 2>/dev/null || echo "No packages found at root"
-
-      - name: Show artifacts
-        run: |
-          ls -lhR artifacts/
-          echo "--- flat ---"
-          find artifacts -type f -not -path '*/.DS_Store'
-
-      - name: Checkout (for version)
-        uses: actions/checkout@v4
+          ls -lh *.dmg *.exe *.AppImage 2>/dev/null
 
       - name: Publish Release
         run: |
