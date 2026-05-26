@@ -1,6 +1,11 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { initI18n } from './i18n';
+
+// Initialize i18n with default language before rendering.
+// Language will be updated when settings are loaded in App.
+initI18n('zh-CN');
 import './styles/tokens.css';
 import './styles/reset.css';
 import './styles/layout.css';

@@ -9,7 +9,7 @@ export function useSettings({
   setNotice: (msg: string) => void;
   setLoadingFlag: (k: 'settings', v: boolean) => void;
 }) {
-  const [settings, setSettings] = useState<AppSettings>({ aiProviders: [], defaultAiProviderId: undefined, theme: 'light', selectedDatabasesByConnection: {} });
+  const [settings, setSettings] = useState<AppSettings>({ aiProviders: [], defaultAiProviderId: undefined, theme: 'light', language: 'zh-CN', selectedDatabasesByConnection: {} });
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [aiDraft, setAiDraft] = useState<AiProviderConfig>(emptyAiProvider);
 
@@ -61,9 +61,14 @@ export function useSettings({
     setNotice(`界面风格已切换为 ${theme}`);
   }, [settings, api, setNotice]);
 
+  const saveLanguage = useCallback(async (language: string) => {
+    const next = await api.saveSettings({ ...settings, language });
+    setSettings(next);
+  }, [settings, api]);
+
   return {
     settings, setSettings, settingsLoaded, setSettingsLoaded,
     aiDraft, setAiDraft,
-    saveAiProvider, testAiProvider, setDefaultProvider, deleteAiProvider, saveTheme
+    saveAiProvider, testAiProvider, setDefaultProvider, deleteAiProvider, saveTheme, saveLanguage
   };
 }

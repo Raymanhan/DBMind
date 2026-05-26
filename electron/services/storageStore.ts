@@ -128,6 +128,7 @@ export async function readSettings(): Promise<AppSettings> {
       aiProviders: [defaultAiProvider],
       defaultAiProviderId: defaultAiProvider.id,
       theme: 'dark',
+      language: 'zh-CN',
       selectedDatabasesByConnection: {}
     };
   }
@@ -141,6 +142,7 @@ export async function readSettings(): Promise<AppSettings> {
     aiProviders: decryptedProviders,
     defaultAiProviderId: parsed.defaultAiProviderId ?? decryptedProviders[0]?.id,
     theme: parsed.theme ?? 'dark',
+    language: parsed.language ?? 'zh-CN',
     selectedDatabasesByConnection: parsed.selectedDatabasesByConnection ?? {}
   };
 }
@@ -150,6 +152,7 @@ export async function writeSettings(settings: AppSettings): Promise<AppSettings>
     aiProviders: settings.aiProviders.length ? settings.aiProviders : [defaultAiProvider],
     defaultAiProviderId: settings.defaultAiProviderId ?? settings.aiProviders[0]?.id ?? defaultAiProvider.id,
     theme: settings.theme ?? 'dark',
+    language: settings.language ?? 'zh-CN',
     selectedDatabasesByConnection: settings.selectedDatabasesByConnection ?? {}
   };
   // Encrypt API keys on write

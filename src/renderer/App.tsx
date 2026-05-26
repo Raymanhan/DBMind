@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import { useTranslation } from 'react-i18next';
 import {Braces, Clock3, Database, Download, Edit3, FileSpreadsheet, Plus, Rows3, Save, Sparkles, Trash2} from 'lucide-react';
 import type {AiConversation, AiProviderConfig, ChatMessage, DbConnectionConfig, DbmindApi, WorkTab} from '../shared/types';
 import {AiPanel} from './components/ai/AiPanel';
@@ -111,6 +112,7 @@ function createConsoleTab(): WorkTab {
 }
 
 export function App() {
+    const { t, i18n } = useTranslation();
     const [view, setView] = useState<AppView>('workspace');
     const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'ai'>('general');
     const [sidebarWidth, setSidebarWidth] = useState(260);
@@ -145,8 +147,15 @@ export function App() {
 
     const {
         settings, setSettings, settingsLoaded, setSettingsLoaded,
-        aiDraft, setAiDraft, saveAiProvider, testAiProvider, setDefaultProvider, deleteAiProvider, saveTheme
+        aiDraft, setAiDraft, saveAiProvider, testAiProvider, setDefaultProvider, deleteAiProvider, saveTheme, saveLanguage
     } = useSettings({api, emptyAiProvider, setNotice, setLoadingFlag: setSettingsLoading});
+
+    // Sync i18n language from settings
+    useEffect(() => {
+        if (settingsLoaded && settings.language && i18n.language !== settings.language) {
+            i18n.changeLanguage(settings.language);
+        }
+    }, [settingsLoaded, settings.language]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const activeConnection = connections.find((c) => c.id === activeConnectionId) ?? connections[0];
 
@@ -185,15 +194,15 @@ export function App() {
 
     const getCellEditBlockReason = useCallback((row: Record<string, unknown>, column: string): string | null => {
         if (!activeConnection) return '请先选择连接';
-        if (activeConnection.driver !== 'mysql' && activeConnection.driver !== 'postgres') return '当前仅 MySQL / PostgreSQL 支持编辑数据';
-        if (activeConnection.readonly) return '当前连接为只读模式';
-        if (activeWorkTab?.kind !== 'table' || !activeWorkTab.dbName || !activeWorkTab.tableName) return '普通 SQL 结果集暂不支持编辑';
-        if (!activeTableSchema) return '未找到当前表结构';
-        if (activeTableSchema.type === 'view') return '视图暂不支持编辑';
+        if (activeConnection.driver !== 'mysql' && activeConnection.driver !== 'postgres') return t('dataEdit.onlyMysqlPg');
+        if (activeConnection.readonly) return t('dataEdit.readonly');
+        if (activeWorkTab?.kind !== 'table' || !activeWorkTab.dbName || !activeWorkTab.tableName) return t('dataEdit.notTableTab');
+        if (!activeTableSchema) return t('dataEdit.noSchema');
+        if (activeTableSchema.type === 'view') return t('dataEdit.viewNotEditable');
         const pks = activeTableSchema.columns.filter((c) => c.primary);
-        if (!pks.length) return '表没有主键，无法安全定位行';
-        if (pks.some((c) => !(c.name in row))) return '结果集中缺少主键列，无法安全定位行';
-        if (pks.some((c) => c.name === column)) return '主键列暂不支持直接编辑';
+        if (!pks.length) return t('dataEdit.noPrimaryKey');
+        if (pks.some((c) => !(c.name in row))) return t('dataEdit.missingPk');
+        if (pks.some((c) => c.name === column)) return t('dataEdit.pkNotEditable');
         return null;
     }, [activeConnection, activeWorkTab, activeTableSchema]);
 
@@ -400,6 +409,7 @@ export function App() {
                     onEdit={setAiDraft}
                     onDelete={deleteAiProvider}
                     onThemeChange={saveTheme}
+                    onLanguageChange={(lang) => { saveLanguage(lang); i18n.changeLanguage(lang); }}
                     onBack={() => { setView('workspace'); setSettingsInitialTab('general'); }}
                     loading={loading.settings}
                 />
@@ -484,15 +494,15 @@ export function App() {
                         <section className="result-zone" style={RESULT_ZONE_STYLE}>
                             <div className="tabs">
                                 <button className={activeResultTab === 'results' ? 'active' : ''}
-                                        onClick={() => updateActiveWorkTab({resultTab: 'results'})}><Rows3 size={14}/> 结果集
+                                        onClick={() => updateActiveWorkTab({resultTab: 'results'})}><Rows3 size={14}/> {t('result.results')}
                                 </button>
                                 <button className={activeResultTab === 'history' ? 'active' : ''}
-                                        onClick={() => updateActiveWorkTab({resultTab: 'history'})}><Clock3 size={14}/> 查询历史
+                                        onClick={() => updateActiveWorkTab({resultTab: 'history'})}><Clock3 size={14}/> {t('result.history')}
                                 </button>
-                                <button onClick={() => exportResult('csv')}><FileSpreadsheet size={14}/> CSV</button>
-                                <button onClick={() => exportResult('json')}><Braces size={14}/> JSON</button>
-                                <span>{activeResult ? `${activeResult.rowCount} rows · ${activeResult.durationMs}ms` : '尚未执行'}</span>
-                                {isResultTruncated && <span className="result-note">仅渲染前 {visibleRows.length} 行</span>}
+                                <button onClick={() => exportResult('csv')}><FileSpreadsheet size={14}/> {t('result.exportCsv')}</button>
+                                <button onClick={() => exportResult('json')}><Braces size={14}/> {t('result.exportJson')}</button>
+                                <span>{activeResult ? `${activeResult.rowCount} rows · ${activeResult.durationMs}ms` : t('result.notExecuted')}</span>
+                                {isResultTruncated && <span className="result-note">{t('result.truncated', { count: visibleRows.length })}</span>}
                                 <button className="tabs-icon" onClick={() => exportResult('csv')} title="下载 CSV"><Download size={14}/></button>
                             </div>
                             {pendingEdits.length > 0 && activeResultTab === 'results' && (
@@ -500,15 +510,15 @@ export function App() {
                                     <div className="batch-edit-header">
                     <span className="batch-edit-count">
                       <Edit3 size={14}/>
-                        {pendingEdits.length} 处修改
+                        {pendingEdits.length} {t('result.changes')}
                     </span>
                                         <div className="batch-edit-header-actions">
                                             <button className="ghost" onClick={undoAllEdits} title="撤销所有修改">
-                                                <Trash2 size={13}/> 全部撤销
+                                                <Trash2 size={13}/> {t('result.undoAll')}
                                             </button>
                                             <button className="primary" onClick={saveBatchEdits}
                                                     disabled={loading.query}>
-                                                <Save size={14}/> {loading.query ? '保存中' : '保存'}
+                                                <Save size={14}/> {loading.query ? t('result.saving') : t('result.save')}
                                             </button>
                                         </div>
                                     </div>
@@ -536,7 +546,7 @@ export function App() {
                                 {loading.query && (
                                     <div className="loading-overlay">
                                         <span className="spinner"/>
-                                        查询执行中...
+                                        {t('topbar.running')}...
                                     </div>
                                 )}
                                 {activeResultTab === 'history' ? (

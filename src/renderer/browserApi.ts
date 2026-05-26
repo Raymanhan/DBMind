@@ -54,6 +54,7 @@ const demoSchemas: Record<string, TableSchema[]> = {
 
 let settings: AppSettings = {
   theme: 'light',
+  language: 'zh-CN',
   selectedDatabasesByConnection: { [demoConnection.id]: ['yingyan', 'test', 'ym_rag'] },
   defaultAiProviderId: 'openai-compatible-default',
   aiProviders: [

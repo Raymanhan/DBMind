@@ -260,6 +260,7 @@ export interface AppSettings {
   aiProviders: AiProviderConfig[];
   defaultAiProviderId?: string;
   theme?: AppTheme;
+  language?: string;
   selectedDatabasesByConnection?: Record<string, string[]>;
 }
 

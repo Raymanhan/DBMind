@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Cpu, Edit3, Moon, Plus, Save, Settings, Sparkles, Sun, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Cpu, Edit3, Globe, Moon, Plus, Save, Settings, Sparkles, Sun, Trash2 } from 'lucide-react';
 import type { AiProviderConfig, AppSettings, AppTheme } from '../../../shared/types';
+import { LANGUAGES } from '../../i18n';
 const emptyAiProvider: AiProviderConfig = {
   id: '',
   name: 'OpenAI Compatible',
@@ -29,6 +30,7 @@ export function SettingsView({
   onEdit,
   onDelete,
   onThemeChange,
+  onLanguageChange,
   onBack,
   sidebarWidth,
   loading,
@@ -44,6 +46,7 @@ export function SettingsView({
   onEdit: (provider: AiProviderConfig) => void;
   onDelete: (id: string) => void;
   onThemeChange: (theme: AppTheme) => void;
+  onLanguageChange: (lang: string) => void;
   onBack: () => void;
   sidebarWidth: number;
   loading: boolean;
@@ -108,6 +111,27 @@ export function SettingsView({
                   <strong>Light</strong>
                   <em>浅色界面，高对比表格与清爽面板。</em>
                 </button>
+              </div>
+            </div>
+            <div className="settings-card">
+              <div className="settings-card-head">
+                <div>
+                  <p>Language</p>
+                  <h2>语言</h2>
+                </div>
+              </div>
+              <div className="settings-form-grid">
+                <label>
+                  <span><Globe size={13} /> 界面语言</span>
+                  <select
+                    value={settings.language ?? 'zh-CN'}
+                    onChange={(e) => onLanguageChange(e.target.value)}
+                  >
+                    {LANGUAGES.map((lang) => (
+                      <option key={lang.code} value={lang.code}>{lang.label}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
           </section>
