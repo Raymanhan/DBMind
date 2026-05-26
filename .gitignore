@@ -1,5 +1,6 @@
-# 只提交 README / LICENSE / .gitignore
+# 只提交 README / LICENSE / icon / .gitignore
 *
 !README.md
 !LICENSE
+!icon.png
 !.gitignore
