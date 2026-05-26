@@ -77,8 +77,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: dbmind-*
-          merge-multiple: true
+
+      - name: Flatten artifacts
+        run: |
+          find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \) -exec mv {} . \;
+          ls -lh *.dmg *.exe *.AppImage 2>/dev/null || echo "No packages found at root"
 
       - name: Show artifacts
         run: |
@@ -99,7 +102,7 @@ jobs:
           echo "Publishing $VERSION to Raymanhan/DBMind..."
 
           # Collect all package files
-          mapfile -t FILES < <(find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \))
+          mapfile -t FILES < <(find . -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \))
           echo "Found ${#FILES[@]} package(s):"
           printf '  %s\n' "${FILES[@]}"
 
