@@ -7,81 +7,89 @@
 <p align="center">
   <strong>AI-powered database management desktop app</strong>
   <br />
-  MySQL · PostgreSQL ｜ 多标签 SQL 编辑器 ｜ AI 智能生成 ｜ 数据编辑 ｜ 表结构设计
+  MySQL · PostgreSQL · Monaco SQL Editor · AI Assistant · Data Editing · Table Designer
 </p>
 
 <p align="center">
-  <a href="#下载">下载</a> ·
-  <a href="#功能">功能</a> ·
-  <a href="#本地开发">本地开发</a> ·
-  <a href="#技术栈">技术栈</a> ·
-  <a href="#许可">许可</a>
+  <a href="#download">Download</a> ·
+  <a href="#latest-release">Latest Release</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#development">Development</a> ·
+  <a href="#license">License</a>
 </p>
 
 ---
 
-## 功能
+## Download
 
-- **AI SQL 生成** — 自然语言描述需求，AI 根据表结构自动生成 SQL。支持 OpenAI / Ollama / 兼容接口，流式响应，多轮对话上下文
-- **多标签 SQL 编辑器** — Monaco Editor 内核，SQL 语法高亮、关键字补全、库/表/列智能提示、右键执行选区、格式化
-- **多数据库支持** — MySQL 和 PostgreSQL，多连接管理，多库搜索与过滤
-- **Schema 浏览器** — 树形展示表结构，字段类型/索引/外键一目了然，双击打开数据浏览
-- **数据浏览与编辑** — 行内编辑、批量修改、变更预览，MySQL 支持安全更新确认
-- **表结构设计器** — 可视化增删改列、索引、外键，DDL 预览后执行
-- **查询历史** — 自动记录每次查询，支持回填到编辑器
-- **结果导出** — CSV / JSON 导出，数据排序
-- **多主题** — 深色 / 浅色主题切换
-- **AI SQL 优化** — 一键分析 SQL 性能问题，给出优化建议和索引推荐
+Download the latest installer from [GitHub Releases](../../releases).
 
-## 下载
+| Platform | Package |
+|----------|---------|
+| macOS Apple Silicon | `DBMind-<version>-mac-arm64.dmg` |
+| macOS Intel | `DBMind-<version>-mac-x64.dmg` |
+| Windows | `DBMind Setup <version>.exe` |
+| Linux | `DBMind-<version>.AppImage` |
 
-前往 [GitHub Releases](../../releases) 下载对应平台的最新版本：
+## Latest Release
 
-| 平台 | 格式 |
-|------|------|
-| macOS (Intel) | `.dmg` |
-| macOS (Apple Silicon) | `.dmg` |
-| Windows | `.exe` (NSIS 安装包) |
-| Linux | `.AppImage` |
+### v0.2.3
 
-## 本地开发
+- Global internationalization now applies across the main workspace, settings, sidebar, connection modal, AI assistant, conversation history, result views, batch editing, cell editing, SQL confirmation modal, table designer, and SQL editor menus.
+- AI SQL generation and optimization now receive the selected UI language as part of the prompt, so explanations and optimization suggestions follow the user's language.
+- Default AI conversations now refresh their title and welcome message when the language changes.
+- Settings layout is fixed for the language selector and narrow windows.
+- Browser preview messages now follow the selected language for key flows.
+
+## Features
+
+- **AI SQL Assistant**: generate SQL from natural language with schema-aware context, table mentions, OpenAI-compatible providers, Ollama, and conversation history.
+- **AI SQL Optimization**: analyze existing SQL and return optimized SQL with performance, readability, safety, and index suggestions.
+- **Global Internationalization**: switch between Simplified Chinese, Traditional Chinese, English, Russian, Japanese, Korean, French, and German.
+- **Multi-tab SQL Workspace**: Monaco-powered SQL editor with syntax highlighting, completions, context actions, formatting, and selection execution.
+- **MySQL / PostgreSQL Connections**: manage multiple connections, browse schemas, search databases, and open tables quickly.
+- **Schema Browser**: inspect tables, columns, indexes, and foreign keys from a compact tree.
+- **Data Browsing and Editing**: edit cells inline, batch changes, preview write SQL, and safely confirm updates.
+- **Table Designer**: visually add, modify, or drop columns, indexes, and foreign keys, then preview generated DDL before applying.
+- **Query History**: automatically records recent queries and lets you send them back to the editor.
+- **Export Results**: export query results as CSV or JSON.
+- **Themes**: switch between light and dark desktop themes.
+
+## Development
 
 ```bash
-# 安装依赖
+# Install dependencies
 npm install
 
-# 浏览器预览（无需 Electron，使用模拟数据）
+# Browser preview with mock data
 npm run dev
 
-# 完整桌面应用开发
+# Full Electron desktop app
 npm run electron:dev
 
-# 类型检查
+# Type check
 npm run typecheck
+
+# Production build
+npm run build
 ```
 
-macOS 下集成窗口样式依赖 Electron 运行时，`npm run dev` 浏览器预览会退化为标准标题栏。
+The browser preview uses mock data and does not connect to local databases. Use `npm run electron:dev` for the full desktop runtime.
 
-## 技术栈
+## Tech Stack
 
-| 层 | 技术 |
-|----|------|
-| 桌面框架 | Electron 42 |
-| 前端 | React 19 + TypeScript |
-| 构建 | Vite 7 |
-| SQL 编辑器 | Monaco Editor |
-| 数据库驱动 | mysql2 / pg |
-| AI 集成 | OpenAI / Ollama / 兼容接口 |
-| 打包 | electron-builder |
+| Layer | Technology |
+|-------|------------|
+| Desktop | Electron 42 |
+| Frontend | React 19 + TypeScript |
+| Build | Vite 7 |
+| SQL Editor | Monaco Editor |
+| Database Drivers | mysql2 / pg |
+| AI Providers | OpenAI / Ollama / OpenAI-compatible APIs |
+| Packaging | electron-builder |
 
-## 许可
+## License
 
-[查看 LICENSE 文件](LICENSE)
+[See LICENSE](LICENSE)
 
-DBMind 为专有软件，免费提供下载和使用。未经授权不得修改、再分发或用于提供托管服务。
-
----
-
-<p align="center">
-  <sub>Built with ❤️ by DBMind Team</sub>
-</p>
+DBMind is proprietary software provided for free download and use. Modification, redistribution, or hosted-service use is not permitted without authorization.
