@@ -172,6 +172,7 @@ export interface AiConversation {
   id: string;
   title: string;
   messages: ChatMessage[];
+  ddlCache?: AiTableDdl[];
   createdAt: string;
   updatedAt: string;
 }

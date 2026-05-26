@@ -249,7 +249,35 @@ export function useAiAssistant({
     const currentInput = aiInputRef.current;
     const currentConvId = activeConvIdRef.current;
     try {
-      const names = extractTableMentions(currentInput);
+      const currentConv = conversationsRef.current.find(c => c.id === activeConvIdRef.current);
+      const existingCache: AiTableDdl[] = currentConv?.ddlCache ?? [];
+      const cachedKeys = new Set(existingCache.map(d => `${d.database ?? ''}.${d.table}`.toLowerCase()));
+
+      // Collect all @mentions from the full conversation (all user messages + current input)
+      const allMentioned = new Set<string>();
+      if (currentConv) {
+        for (const msg of currentConv.messages) {
+          if (msg.role === 'user') {
+            for (const name of extractTableMentions(msg.content)) {
+              allMentioned.add(name);
+            }
+          }
+        }
+      }
+      for (const name of extractTableMentions(currentInput)) {
+        allMentioned.add(name);
+      }
+
+      // Filter to names not already in DDL cache
+      const newNames = [...allMentioned].filter(name => {
+        const normalized = name.toLowerCase();
+        for (const key of cachedKeys) {
+          if (key === normalized || key.endsWith('.' + normalized)) return false;
+        }
+        return true;
+      });
+
+      // Resolve and fetch DDLs only for new mentions
       const tables: TableSchema[] = [];
       const seenTables = new Set<string>();
       const addTable = (table: TableSchema, dbName?: string) => {
@@ -261,7 +289,7 @@ export function useAiAssistant({
         }
       };
 
-      for (const name of names) {
+      for (const name of newNames) {
         if (name.includes('.')) {
           const [db, tableName] = name.split('.');
           const dbKey = Object.keys(schemaMap).find((k) => k.toLowerCase() === db.toLowerCase());
@@ -285,17 +313,38 @@ export function useAiAssistant({
           }
         }
       }
-      const context = tables.length
-        ? tables
-        : selectedSchema
-          ? [{ ...selectedSchema, dbName: selectedSchema.dbName ?? selectedSchemaDb }]
-          : [];
-      const tableDdls: AiTableDdl[] = await Promise.all(context.map(async (table) => {
-        const ddl = await api.getTableDdl(activeConnectionId, table.name, table.dbName);
-        if (!ddl.trim()) throw new Error(t('ai.ddlMissing', { table: table.dbName ? `${table.dbName}.${table.name}` : table.name }));
-        return { database: table.dbName, table: table.name, ddl };
-      }));
-      const currentConv = conversationsRef.current.find(c => c.id === activeConvIdRef.current);
+
+      // Fetch DDLs for newly resolved tables, fall back to selectedSchema if nothing new and cache empty
+      let newDdls: AiTableDdl[] = [];
+      if (tables.length > 0) {
+        newDdls = await Promise.all(tables.map(async (table) => {
+          const ddl = await api.getTableDdl(activeConnectionId, table.name, table.dbName);
+          if (!ddl.trim()) throw new Error(t('ai.ddlMissing', { table: table.dbName ? `${table.dbName}.${table.name}` : table.name }));
+          return { database: table.dbName, table: table.name, ddl };
+        }));
+      }
+
+      // Merge new DDLs into existing cache, replacing stale entries for the same table
+      const mergedDdls = [...existingCache];
+      for (const ddl of newDdls) {
+        const key = `${ddl.database ?? ''}.${ddl.table}`.toLowerCase();
+        const idx = mergedDdls.findIndex(d => `${d.database ?? ''}.${d.table}`.toLowerCase() === key);
+        if (idx >= 0) mergedDdls[idx] = ddl;
+        else mergedDdls.push(ddl);
+      }
+
+      // If cache is still empty, use selectedSchema as fallback
+      let tableDdls = mergedDdls;
+      let context = tables;
+      if (tableDdls.length === 0 && selectedSchema) {
+        const fallback = { ...selectedSchema, dbName: selectedSchema.dbName ?? selectedSchemaDb };
+        context = [fallback];
+        const ddl = await api.getTableDdl(activeConnectionId, fallback.name, fallback.dbName);
+        if (ddl.trim()) {
+          tableDdls = [{ database: fallback.dbName, table: fallback.name, ddl }];
+        }
+      }
+
       const history = buildConversationHistory(currentConv?.messages ?? [makeWelcomeMessage(t)]);
       const request = { prompt: currentInput, dialect: (activeConnection?.driver as 'mysql' | 'postgres') ?? 'mysql', tables: context, tableDdls, history, language: i18n.language };
 
@@ -309,6 +358,7 @@ export function useAiAssistant({
             ...c,
             title: needsTitle ? titleFromMessage(currentInput) : c.title,
             messages: [...c.messages, userMsg],
+            ddlCache: tableDdls,
             updatedAt: new Date().toISOString()
           };
         })
@@ -321,7 +371,7 @@ export function useAiAssistant({
       };
       setConversations((prev) =>
         prev.map((c) => c.id === currentConvId
-          ? { ...c, messages: [...c.messages, assistantMsg], updatedAt: new Date().toISOString() }
+          ? { ...c, messages: [...c.messages, assistantMsg], ddlCache: tableDdls, updatedAt: new Date().toISOString() }
           : c)
       );
       updateActiveWorkTab({ baseSql: response.sql, sql: response.sql, sort: undefined });
