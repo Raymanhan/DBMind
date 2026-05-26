@@ -68,7 +68,7 @@ jobs:
 
   release:
     name: Publish to Public Repo
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
 
