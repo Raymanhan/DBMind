@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AiProviderConfig, AppSettings, AppTheme, DbmindApi } from '../../shared/types';
 
 export function useSettings({
@@ -9,6 +10,7 @@ export function useSettings({
   setNotice: (msg: string) => void;
   setLoadingFlag: (k: 'settings', v: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<AppSettings>({ aiProviders: [], defaultAiProviderId: undefined, theme: 'light', language: 'zh-CN', selectedDatabasesByConnection: {} });
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [aiDraft, setAiDraft] = useState<AiProviderConfig>(emptyAiProvider);
@@ -29,17 +31,17 @@ export function useSettings({
       const providers = [provider, ...settings.aiProviders.filter((p) => p.id !== id)];
       const next = await api.saveSettings({ ...settings, aiProviders: providers, defaultAiProviderId: id });
       setSettings(next); setAiDraft(provider);
-      setNotice('AI 配置已保存');
-    } catch (e) { setNotice(e instanceof Error ? e.message : 'AI 配置保存失败'); } finally { setLoadingFlag('settings', false); }
-  }, [aiDraft, settings, api, setNotice, setLoadingFlag]);
+      setNotice(t('settings.providerSaved'));
+    } catch (e) { setNotice(e instanceof Error ? e.message : t('settings.providerSaveFailed')); } finally { setLoadingFlag('settings', false); }
+  }, [aiDraft, settings, api, setNotice, setLoadingFlag, t]);
 
   const testAiProvider = useCallback(async () => {
     setLoadingFlag('settings', true);
     try {
       const res = await api.testAiProvider({ ...aiDraft, id: aiDraft.id || 'draft' });
       setNotice(res.message);
-    } catch (e) { setNotice(e instanceof Error ? e.message : 'AI 配置测试失败'); } finally { setLoadingFlag('settings', false); }
-  }, [aiDraft, api, setNotice, setLoadingFlag]);
+    } catch (e) { setNotice(e instanceof Error ? e.message : t('settings.providerTestFailed')); } finally { setLoadingFlag('settings', false); }
+  }, [aiDraft, api, setNotice, setLoadingFlag, t]);
 
   const setDefaultProvider = useCallback(async (id: string) => {
     const next = await api.saveSettings({ ...settings, defaultAiProviderId: id });
@@ -52,14 +54,14 @@ export function useSettings({
     const providers = settings.aiProviders.filter((p) => p.id !== id);
     const next = await api.saveSettings({ ...settings, aiProviders: providers, defaultAiProviderId: providers[0]?.id });
     setSettings(next); setAiDraft(providers[0] ?? emptyAiProvider);
-    setNotice('AI 配置已删除');
-  }, [settings, api, emptyAiProvider, setNotice]);
+    setNotice(t('settings.providerDeleted'));
+  }, [settings, api, emptyAiProvider, setNotice, t]);
 
   const saveTheme = useCallback(async (theme: AppTheme) => {
     const next = await api.saveSettings({ ...settings, theme });
     setSettings(next);
-    setNotice(`界面风格已切换为 ${theme}`);
-  }, [settings, api, setNotice]);
+    setNotice(t('settings.themeSaved', { theme: t(theme === 'dark' ? 'settings.themeDark' : 'settings.themeLight') }));
+  }, [settings, api, setNotice, t]);
 
   const saveLanguage = useCallback(async (language: string) => {
     const next = await api.saveSettings({ ...settings, language });

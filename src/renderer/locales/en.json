@@ -105,7 +105,22 @@
     "providerTestFailed": "AI provider test failed.",
     "providerSaved": "AI provider saved.",
     "providerDeleted": "AI provider deleted.",
-    "browserTestNotice": "Please use the Electron desktop app to test AI configuration."
+    "browserTestNotice": "Please use the Electron desktop app to test AI configuration.",
+    "generalDescription": "Adjust the desktop appearance and everyday preferences.",
+    "aiDescription": "Configure OpenAI, OpenAI Compatible, Azure OpenAI, Ollama, or custom OpenAI-style services.",
+    "appearance": "Appearance",
+    "themeDarkDescription": "A dark workspace for long SQL sessions.",
+    "themeLightDescription": "A light interface with crisp tables and clean panels.",
+    "interfaceLanguage": "Interface Language",
+    "providerForm": "Provider Form",
+    "providers": "Providers",
+    "newProvider": "New Config",
+    "editProvider": "Edit AI Config",
+    "createProvider": "New AI Config",
+    "testing": "Testing...",
+    "saving": "Saving...",
+    "providerSaveFailed": "Failed to save AI provider.",
+    "themeSaved": "Theme switched to {{theme}}."
   },
   "connection": {
     "title": "Connection",

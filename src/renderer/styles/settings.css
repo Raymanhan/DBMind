@@ -161,11 +161,23 @@
   gap: 12px;
   padding: 18px;
 }
-.settings-grid label {
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 420px);
+  gap: 12px;
+  padding: 18px;
+}
+.settings-grid label,
+.settings-form-grid label {
   display: grid;
   gap: 7px;
   color: var(--muted);
   font-size: 12px;
+}
+.settings-form-grid label span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .settings-grid .wide {
   grid-column: span 2;
@@ -280,7 +292,58 @@
   height: 28px;
   padding: 0 8px;
 }
+.settings-empty {
+  margin: 6px;
+  padding: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
 .ok-icon { color: var(--accent2); }
+
+@media (max-width: 860px) {
+  .settings-page {
+    flex-direction: column;
+  }
+  .settings-sidebar {
+    width: auto !important;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .window-integrated .settings-sidebar {
+    padding-top: 20px;
+  }
+  .settings-nav-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .settings-nav-label {
+    flex-basis: 100%;
+  }
+  .settings-nav-item {
+    width: auto;
+  }
+  .settings-hero,
+  .settings-card-head,
+  .provider-item {
+    align-items: flex-start;
+    grid-template-columns: 1fr;
+  }
+  .settings-hero {
+    flex-direction: column;
+  }
+  .settings-grid,
+  .settings-form-grid,
+  .theme-options {
+    grid-template-columns: 1fr;
+  }
+  .settings-grid .wide {
+    grid-column: auto;
+  }
+}
 
 /* ── Animations ── */
 .settings-section {

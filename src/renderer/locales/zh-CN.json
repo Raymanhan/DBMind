@@ -1,5 +1,7 @@
 {
-  "app": { "name": "DBMind" },
+  "app": {
+    "name": "DBMind"
+  },
   "sidebar": {
     "connections": "连接",
     "newConnection": "新建连接",
@@ -103,7 +105,22 @@
     "providerTestFailed": "AI 配置测试失败。",
     "providerSaved": "AI 提供商已保存。",
     "providerDeleted": "AI 提供商已删除。",
-    "browserTestNotice": "请在 Electron 桌面应用中测试 AI 配置。"
+    "browserTestNotice": "请在 Electron 桌面应用中测试 AI 配置。",
+    "generalDescription": "调整桌面端显示风格与日常使用偏好。",
+    "aiDescription": "兼容 OpenAI、OpenAI Compatible、Azure OpenAI、Ollama 与自定义 OpenAI 格式服务。",
+    "appearance": "外观",
+    "themeDarkDescription": "深色工作台，适合长时间编写 SQL。",
+    "themeLightDescription": "浅色界面，高对比表格与清爽面板。",
+    "interfaceLanguage": "界面语言",
+    "providerForm": "提供商表单",
+    "providers": "提供商",
+    "newProvider": "新建配置",
+    "editProvider": "编辑 AI 配置",
+    "createProvider": "新建 AI 配置",
+    "testing": "测试中...",
+    "saving": "保存中...",
+    "providerSaveFailed": "AI 提供商保存失败。",
+    "themeSaved": "界面风格已切换为{{theme}}。"
   },
   "connection": {
     "title": "连接",
