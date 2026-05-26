@@ -6,7 +6,7 @@
   overflow: hidden;
   transition: grid-template-columns 0.35s var(--ease-spring);
   background:
-    radial-gradient(circle at 25% 0%, rgba(91, 77, 255, 0.17), transparent 30%),
+    radial-gradient(circle at 25% 0%, rgba(var(--accent-rgb), 0.17), transparent 30%),
     radial-gradient(circle at 80% 10%, rgba(15, 183, 165, 0.12), transparent 25%),
     var(--bg);
 }
@@ -21,7 +21,7 @@
 }
 .resize-handle-col:hover,
 .resize-handle-col:active {
-  background: rgba(139, 124, 255, 0.35);
+  background: rgba(var(--accent-rgb), 0.35);
 }
 
 .resize-handle-row {
@@ -34,7 +34,7 @@
 }
 .resize-handle-row:hover,
 .resize-handle-row:active {
-  background: rgba(139, 124, 255, 0.35);
+  background: rgba(var(--accent-rgb), 0.35);
 }
 
 @media (max-width: 1180px) {

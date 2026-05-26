@@ -111,7 +111,7 @@
   font-size: 11px;
 }
 .designer-section button.primary {
-  color: #07140f;
+  color: var(--text);
   background: var(--accent2);
   border-color: transparent;
 }

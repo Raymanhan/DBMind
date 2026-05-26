@@ -52,7 +52,7 @@
   max-height: 72px;
   margin: 0;
   overflow: hidden;
-  color: #d9d9e6;
+  color: var(--muted);
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 11px;
   line-height: 1.45;

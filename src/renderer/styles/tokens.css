@@ -10,7 +10,9 @@
   --muted: #a6afc5;
   --dim: #6f7a93;
   --accent: #5b4dff;
+  --accent-rgb: 91, 77, 255;
   --accent2: #0fb7a5;
+  --accent2-rgb: 15, 183, 165;
   --amber: #e6a31a;
   --danger: #ef5271;
   --shadow-soft: 0 18px 50px rgba(3, 8, 23, 0.26);

@@ -21,7 +21,7 @@
 }
 .sidebar > .resize-handle-col:hover,
 .sidebar > .resize-handle-col:active {
-  background: rgba(139, 124, 255, 0.35);
+  background: rgba(var(--accent-rgb), 0.35);
 }
 .object-browser {
   flex: 1;
@@ -142,8 +142,8 @@
   width: 100%;
   height: 36px;
   color: var(--text);
-  background: rgba(139, 124, 255, 0.13);
-  border: 1px solid rgba(139, 124, 255, 0.28);
+  background: rgba(var(--accent-rgb), 0.13);
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
   border-radius: 7px;
   font-size: 12px;
   font-weight: 650;
@@ -204,8 +204,8 @@
   width: 28px;
   height: 28px;
   color: var(--accent);
-  background: rgba(91, 77, 255, 0.12);
-  border: 1px solid rgba(91, 77, 255, 0.20);
+  background: rgba(var(--accent-rgb), 0.12);
+  border: 1px solid rgba(var(--accent-rgb), 0.20);
   border-radius: 8px;
 }
 .row-actions {
@@ -231,8 +231,8 @@
 .table-item svg { width: 13px; height: 13px; }
 .connection-item.active, .table-item.active {
   color: var(--text);
-  background: rgba(91, 77, 255, 0.12);
-  border-color: rgba(91, 77, 255, 0.26);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.26);
 }
 .table-item.mentioned { box-shadow: inset 3px 0 0 var(--accent2); }
 
@@ -262,7 +262,7 @@
   font-size: 11px;
 }
 .required-mark {
-  color: #ef5271;
+  color: var(--danger);
   font-weight: 700;
 }
 .field-required {
@@ -274,7 +274,7 @@
   position: absolute;
   top: 8px;
   right: 10px;
-  color: #ef5271;
+  color: var(--danger);
   font-size: 13px;
   font-weight: 700;
   pointer-events: none;
@@ -290,7 +290,7 @@ input, select, textarea {
   outline: none;
 }
 input, select { height: 34px; padding: 0 10px; font-size: 12px; }
-input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.55); }
+input:focus, select:focus, textarea:focus { border-color: rgba(var(--accent-rgb), 0.55); }
 
 .form-actions button, .topbar-actions button, .composer button, .danger, .settings-actions button, .provider-actions button {
   display: inline-flex;
@@ -385,8 +385,8 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   color: var(--accent);
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: rgba(91, 77, 255, 0.10);
-  border: 1px solid rgba(91, 77, 255, 0.18);
+  background: rgba(var(--accent-rgb), 0.10);
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
   border-radius: 6px;
   font-size: 11px;
   font-style: normal;
@@ -486,7 +486,7 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
   border-radius: 0 6px 6px 0;
 }
 .tree-group .table-item.active {
-  border-left-color: rgba(139, 124, 255, 0.4);
+  border-left-color: rgba(var(--accent-rgb), 0.4);
 }
 
 .searchbox {
@@ -592,8 +592,8 @@ input:focus, select:focus, textarea:focus { border-color: rgba(139, 124, 255, 0.
 .footer-btn:hover,
 .footer-btn.active {
   color: var(--accent);
-  background: rgba(91, 77, 255, 0.12);
-  border-color: rgba(91, 77, 255, 0.28);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.28);
 }
 
 /* ── Apple-style button feedback ── */
@@ -603,5 +603,5 @@ button:active:not(:disabled) {
 }
 input:focus, select:focus, textarea:focus {
   transition: border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
-  box-shadow: 0 0 0 3px rgba(91, 77, 255, 0.18);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
 }

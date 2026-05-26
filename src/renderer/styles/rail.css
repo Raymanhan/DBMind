@@ -27,7 +27,7 @@
 }
 .rail-btn:hover, .rail-btn.active, .icon-btn:hover {
   color: var(--accent);
-  background: rgba(91, 77, 255, 0.12);
-  border-color: rgba(91, 77, 255, 0.28);
-  box-shadow: 0 8px 22px rgba(91, 77, 255, 0.12);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.28);
+  box-shadow: 0 8px 22px rgba(var(--accent-rgb), 0.12);
 }

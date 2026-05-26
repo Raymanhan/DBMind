@@ -194,8 +194,8 @@
   height: 26px;
   padding: 0 10px;
   color: var(--text);
-  background: rgba(91, 77, 255, 0.11);
-  border: 1px solid rgba(91, 77, 255, 0.20);
+  background: rgba(var(--accent-rgb), 0.11);
+  border: 1px solid rgba(var(--accent-rgb), 0.20);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
@@ -236,8 +236,8 @@
 }
 .tabs button.active {
   color: var(--accent);
-  background: rgba(91, 77, 255, 0.10);
-  border-color: rgba(91, 77, 255, 0.22);
+  background: rgba(var(--accent-rgb), 0.10);
+  border-color: rgba(var(--accent-rgb), 0.22);
 }
 .tabs button:hover {
   color: var(--text);

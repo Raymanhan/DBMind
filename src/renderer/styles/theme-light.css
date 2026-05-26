@@ -10,7 +10,9 @@
   --muted: #56627a;
   --dim: #8a94aa;
   --accent: #4f46ff;
+  --accent-rgb: 79, 70, 255;
   --accent2: #0aa390;
+  --accent2-rgb: 10, 163, 144;
   --amber: #b7791f;
   --danger: #d63f5c;
   --shadow-soft: 0 20px 60px rgba(30, 42, 68, 0.11);
@@ -97,7 +99,7 @@
 .theme-light .mention-dropdown,
 .theme-light .conv-dropdown {
   background: #ffffff;
-  border-color: rgba(79, 70, 229, 0.24);
+  border-color: rgba(var(--accent-rgb), 0.24);
   box-shadow: 0 14px 38px rgba(25, 35, 60, 0.18);
 }
 
@@ -111,13 +113,13 @@
 .theme-light .mention-item.active,
 .theme-light .conv-item:hover,
 .theme-light .conv-item.active {
-  background: rgba(79, 70, 229, 0.11);
+  background: rgba(var(--accent-rgb), 0.11);
 }
 
 .theme-light .mention-db {
   color: #4338ca;
-  background: rgba(79, 70, 229, 0.09);
-  border-color: rgba(79, 70, 229, 0.20);
+  background: rgba(var(--accent-rgb), 0.09);
+  border-color: rgba(var(--accent-rgb), 0.20);
 }
 
 .theme-light .mention-table {
@@ -135,8 +137,8 @@
 .theme-light .chat-message.user,
 .theme-light .connection-item.active,
 .theme-light .table-item.active {
-  background: rgba(79, 70, 229, 0.10);
-  border-color: rgba(79, 70, 229, 0.22);
+  background: rgba(var(--accent-rgb), 0.10);
+  border-color: rgba(var(--accent-rgb), 0.22);
 }
 
 .theme-light th {
@@ -181,4 +183,27 @@
 
 .theme-light .loading-overlay {
   background: rgba(246, 247, 251, 0.70);
+}
+
+.theme-light .designer-section {
+  background: #f8faff;
+}
+.theme-light .rail-btn,
+.theme-light .icon-btn {
+  background: rgba(30, 42, 68, 0.04);
+}
+.theme-light .rail-btn:hover,
+.theme-light .rail-btn.active,
+.theme-light .icon-btn:hover {
+  background: rgba(var(--accent-rgb), 0.10);
+  border-color: rgba(var(--accent-rgb), 0.24);
+}
+.theme-light .topbar-actions button {
+  background: #f0f3f9;
+}
+.theme-light .topbar-meta span {
+  background: #f0f3f9;
+}
+.theme-light .table-actions button {
+  background: #f0f3f9;
 }

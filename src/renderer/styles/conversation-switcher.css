@@ -14,14 +14,14 @@
   height: 26px;
   padding: 0;
   color: var(--accent);
-  background: rgba(139, 124, 255, 0.12);
-  border: 1px solid rgba(139, 124, 255, 0.2);
+  background: rgba(var(--accent-rgb), 0.12);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
   border-radius: 6px;
   cursor: pointer;
   flex-shrink: 0;
 }
 .new-conv-btn:hover {
-  background: rgba(139, 124, 255, 0.24);
+  background: rgba(var(--accent-rgb), 0.24);
 }
 
 .conv-title-btn {
@@ -29,7 +29,7 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
-  max-width: 100%;
+  max-width: 120px;
   padding: 3px 8px;
   color: var(--dim);
   background: transparent;
@@ -53,8 +53,7 @@
   position: absolute;
   top: 100%;
   left: 0;
-  right: 0;
-  min-width: 220px;
+  width: 260px;
   max-height: 300px;
   overflow-y: auto;
   margin-top: 6px;
@@ -111,7 +110,7 @@
 }
 .conv-item:hover,
 .conv-item.active {
-  background: rgba(139, 124, 255, 0.18);
+  background: rgba(var(--accent-rgb), 0.18);
 }
 .conv-item-main {
   flex: 1;

@@ -81,7 +81,10 @@ jobs:
           merge-multiple: true
 
       - name: Show artifacts
-        run: ls -lh artifacts/
+        run: |
+          ls -lhR artifacts/
+          echo "--- flat ---"
+          find artifacts -type f -not -path '*/.DS_Store'
 
       - name: Checkout (for version)
         uses: actions/checkout@v4
@@ -95,12 +98,17 @@ jobs:
           fi
           echo "Publishing $VERSION to Raymanhan/DBMind..."
 
+          # Collect all package files
+          mapfile -t FILES < <(find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \))
+          echo "Found ${#FILES[@]} package(s):"
+          printf '  %s\n' "${FILES[@]}"
+
           if gh release view "$VERSION" --repo Raymanhan/DBMind > /dev/null 2>&1; then
             echo "Release $VERSION exists, uploading assets..."
-            gh release upload "$VERSION" artifacts/* --repo Raymanhan/DBMind --clobber
+            gh release upload "$VERSION" "${FILES[@]}" --repo Raymanhan/DBMind --clobber
           else
             echo "Creating release $VERSION..."
-            gh release create "$VERSION" artifacts/* \
+            gh release create "$VERSION" "${FILES[@]}" \
               --repo Raymanhan/DBMind \
               --title "DBMind $VERSION" \
               --notes "Automated build. See [releases](https://github.com/Raymanhan/DBMind/releases) for details." \
