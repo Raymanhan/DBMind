@@ -83,12 +83,18 @@ jobs:
       - name: Show artifacts
         run: ls -lh artifacts/
 
+      - name: Checkout (for version)
+        uses: actions/checkout@v4
+
       - name: Publish Release
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="v$(node -p "require('./package.json').version")"
+          fi
           echo "Publishing $VERSION to Raymanhan/DBMind..."
 
-          # Check if release already exists
           if gh release view "$VERSION" --repo Raymanhan/DBMind > /dev/null 2>&1; then
             echo "Release $VERSION exists, uploading assets..."
             gh release upload "$VERSION" artifacts/* --repo Raymanhan/DBMind --clobber
@@ -97,7 +103,7 @@ jobs:
             gh release create "$VERSION" artifacts/* \
               --repo Raymanhan/DBMind \
               --title "DBMind $VERSION" \
-              --notes "Automated build from dbmind-source. See [releases](https://github.com/Raymanhan/DBMind/releases) for details." \
+              --notes "Automated build. See [releases](https://github.com/Raymanhan/DBMind/releases) for details." \
               --draft=false
           fi
         env:
