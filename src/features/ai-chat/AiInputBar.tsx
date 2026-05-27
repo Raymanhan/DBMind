@@ -36,7 +36,7 @@ export function AiInputBar({ conversationId, database, onStreamStart, onStreamEn
   const [sending, setSending] = useState(false);
   const [mention, setMention] = useState<MentionState>(INITIAL_MENTION);
 
-  const ai = useSettingsStore((s) => s.ai);
+  const activeConn = useSettingsStore((s) => s.activeConnection());
   const addMessage = useChatStore((s) => s.addMessage);
   const pinTable = useChatStore((s) => s.pinTable);
   const activeTabId = useEditorStore((s) => s.activeTabId);
@@ -290,7 +290,7 @@ export function AiInputBar({ conversationId, database, onStreamStart, onStreamEn
       onStreamStart();
       await aiChat(
         database, history, currentSql, allDdls,
-        ai.api_key, ai.model, ai.api_url, ai.max_tokens, ai.temperature,
+        activeConn?.api_key, activeConn?.model, activeConn?.api_url, activeConn?.max_tokens, activeConn?.temperature,
       );
       onStreamEnd();
     } catch (err) {
@@ -303,7 +303,7 @@ export function AiInputBar({ conversationId, database, onStreamStart, onStreamEn
     } finally {
       setSending(false);
     }
-  }, [database, ai, addMessage, pinTable, onStreamStart, onStreamEnd]);
+  }, [database, activeConn, addMessage, pinTable, onStreamStart, onStreamEnd]);
 
   const handleBlur = useCallback(() => {
     setTimeout(() => {
@@ -330,7 +330,7 @@ export function AiInputBar({ conversationId, database, onStreamStart, onStreamEn
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             onBlur={handleBlur}
-            placeholder={ai.api_key ? 'Ask AI… (type @ to add table context)' : 'Set API key in Settings first'}
+            placeholder={activeConn?.api_key ? 'Ask AI… (type @ to add table context)' : 'Set API key in Settings first'}
             disabled={sending}
             rows={1}
           />

@@ -1,6 +1,6 @@
 use crate::events;
 use crate::AppState;
-use dbmind_core::types::{ColumnMeta, CrossDbTableBrief, TableBrief, TableSchema};
+use dbmind_core::types::{CrossDbTableBrief, TableBrief, TableSchema};
 use tauri::State;
 
 #[tauri::command]

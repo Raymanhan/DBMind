@@ -78,7 +78,10 @@ impl AiProvider for OpenAiProvider {
         let temperature = self.temperature;
 
         tokio::spawn(async move {
-            let client = reqwest::Client::new();
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(120))
+                .build()
+                .unwrap_or_default();
 
             let mut body = serde_json::json!({
                 "model": model,
@@ -101,11 +104,33 @@ impl AiProvider for OpenAiProvider {
             match client
                 .post(&api_url)
                 .header("Authorization", format!("Bearer {}", api_key))
+                .header("Content-Type", "application/json")
                 .json(&body)
                 .send()
                 .await
             {
                 Ok(resp) => {
+                    let status = resp.status();
+                    if !status.is_success() {
+                        let status_code = status.as_u16();
+                        let error_body = resp.text().await.unwrap_or_else(|_| String::new());
+                        let error_msg = if !error_body.is_empty() {
+                            // Try to extract OpenAI-style error message
+                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&error_body) {
+                                parsed["error"]["message"]
+                                    .as_str()
+                                    .unwrap_or_else(|| parsed["message"].as_str().unwrap_or(&error_body))
+                                    .to_string()
+                            } else {
+                                error_body
+                            }
+                        } else {
+                            format!("HTTP {}", status_code)
+                        };
+                        let _ = tx.send(AiStreamItem::Error(format!("API error (HTTP {}): {}", status_code, error_msg))).await;
+                        return;
+                    }
+
                     let mut stream = resp.bytes_stream();
                     let mut line_buf = String::new();
                     while let Some(chunk) = stream.next().await {
@@ -123,7 +148,10 @@ impl AiProvider for OpenAiProvider {
                                     }
                                 }
                             }
-                            Err(_) => break,
+                            Err(e) => {
+                                let _ = tx.send(AiStreamItem::Error(format!("Stream error: {}", e))).await;
+                                return;
+                            }
                         }
                     }
                     // Flush remaining buffer
@@ -137,7 +165,7 @@ impl AiProvider for OpenAiProvider {
                     let _ = tx.send(AiStreamItem::Done).await;
                 }
                 Err(e) => {
-                    let _ = tx.send(AiStreamItem::Error(e.to_string())).await;
+                    let _ = tx.send(AiStreamItem::Error(format!("Request failed: {}", e))).await;
                 }
             }
         });

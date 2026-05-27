@@ -87,6 +87,8 @@ pub async fn chat(
     max_tokens: Option<u32>,
     temperature: Option<f32>,
 ) -> Result<String, String> {
+    log::info!("[AI chat] api_key={} api_url={} model={} max_tokens={} temp={}", api_key.as_deref().unwrap_or("(none)"), api_url.as_deref().unwrap_or("(none)"), model.as_deref().unwrap_or("(none)"), max_tokens.map(|t| t.to_string()).unwrap_or_else(|| "default".to_string()), temperature.map(|t| t.to_string()).unwrap_or_else(|| "default".to_string()));
+
     let key = api_key
         .or_else(|| std::env::var("OPENAI_API_KEY").ok())
         .ok_or_else(|| {

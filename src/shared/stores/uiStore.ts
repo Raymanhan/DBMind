@@ -20,7 +20,7 @@ interface UiState {
 export const useUiStore = create<UiState>((set) => ({
   theme: 'dark',
   sidebarOpen: true,
-  aiPanelOpen: false,
+  aiPanelOpen: true,
   settingsOpen: false,
   sidebarWidth: 280,
   editorSplitPx: null,

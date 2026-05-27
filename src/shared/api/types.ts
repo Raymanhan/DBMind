@@ -123,13 +123,20 @@ export interface ColumnBrief {
 
 export type AiProvider = 'openai' | 'ollama' | 'compatible';
 
-export interface AiConfig {
+export interface AiConnection {
+  id: string;
+  name: string;
   provider: AiProvider;
   api_key?: string;
   api_url?: string;
   model: string;
   max_tokens: number;
   temperature: number;
+}
+
+export interface AiConfig {
+  connections: AiConnection[];
+  activeId: string;
 }
 
 export interface AppSettings {
