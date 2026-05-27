@@ -58,7 +58,7 @@ jobs:
             libayatana-appindicator3-dev
 
       - name: Build & Bundle with Tauri
-        uses: tauri-apps/tauri-action@v2
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
