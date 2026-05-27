@@ -15,15 +15,15 @@ jobs:
           - os: macos-latest
             target: universal-apple-darwin
             label: macOS Universal (Intel + Apple Silicon)
-            bundle_glob: '*.dmg'
+            bundle_ext: dmg
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             label: Windows x64
-            bundle_glob: '*.exe *.msi'
+            bundle_ext: 'msi exe'
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             label: Linux x64
-            bundle_glob: '*.AppImage *.deb'
+            bundle_ext: 'AppImage deb'
 
     runs-on: ${{ matrix.os }}
 
@@ -38,6 +38,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
@@ -54,38 +59,30 @@ jobs:
             libgtk-3-dev \
             libayatana-appindicator3-dev
 
+      - name: Build frontend
+        run: npm run build
+
       - name: Build & Bundle with Tauri
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tauriScript: tauri:build
-          args: --target ${{ matrix.target }}
+        run: npx tauri build --target ${{ matrix.target }}
 
       - name: Collect bundle artifact
         shell: bash
         run: |
           mkdir -p upload
-          PLATFORM="${{ matrix.os }}"
-          if [ "$PLATFORM" = "macos-latest" ]; then
-            find target -name "*.dmg" -exec cp {} upload/ \; 2>/dev/null || true
-          elif [ "$PLATFORM" = "windows-latest" ]; then
-            find target -name "*.msi" -exec cp {} upload/ \; 2>/dev/null || true
-            find target -name "*.exe" -exec cp {} upload/ \; 2>/dev/null || true
-          else
-            find target -name "*.AppImage" -exec cp {} upload/ \; 2>/dev/null || true
-            find target -name "*.deb" -exec cp {} upload/ \; 2>/dev/null || true
-          fi
+          # Search for bundles in target directory
+          for ext in ${{ matrix.bundle_ext }}; do
+            find target -name "*.${ext}" -exec cp {} upload/ \; 2>/dev/null || true
+          done
           ls -lh upload/
 
       - name: Rename bundle consistently
         shell: bash
         run: |
           cd upload
+          tag="${{ github.ref_name }}"
           for f in *; do
             [ ! -f "$f" ] && continue
             ext="${f##*.}"
-            tag="${{ github.ref_name }}"
             case "$ext" in
               dmg)      mv "$f" "DBMind_${tag}_macos_universal.dmg" 2>/dev/null || true ;;
               exe)      mv "$f" "DBMind_${tag}_windows_x64.exe" 2>/dev/null || true ;;
@@ -111,6 +108,13 @@ jobs:
       contents: read
 
     steps:
+      - name: Checkout public repo
+        uses: actions/checkout@v4
+        with:
+          repository: Raymanhan/DBMind
+          token: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          ref: main
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
