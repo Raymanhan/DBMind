@@ -1,0 +1,17 @@
+[package]
+name = "dbmind-query"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dbmind-core = { path = "../dbmind-core" }
+dbmind-db = { path = "../dbmind-db" }
+dbmind-sql = { path = "../dbmind-sql" }
+dbmind-cache = { path = "../dbmind-cache" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2"
+log = "0.4"
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+async-trait = "0.1"

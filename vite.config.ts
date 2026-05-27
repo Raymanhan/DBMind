@@ -6,6 +6,19 @@ export default defineConfig({
   base: '',
   build: {
     outDir: 'dist',
-    emptyOutDir: true
-  }
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          monaco: ['@monaco-editor/react', 'monaco-editor'],
+          grid: ['@glideapps/glide-data-grid'],
+        },
+      },
+    },
+  },
+  clearScreen: false,
+  server: {
+    port: 5173,
+    strictPort: true,
+  },
 });

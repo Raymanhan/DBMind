@@ -1,0 +1,24 @@
+.rail-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  transition: all var(--transition);
+}
+
+.rail-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+}
+
+.rail-btn.active {
+  color: var(--color-primary);
+  background: var(--color-bg-tertiary);
+}
+
+.rail-spacer {
+  flex: 1;
+}

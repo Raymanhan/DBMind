@@ -1,0 +1,343 @@
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sidebar-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-sm) 0;
+}
+
+.sidebar-section:first-child {
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* ─── Connection tree ─── */
+.connection-tree,
+.schema-tree {
+  padding: 0 var(--space-sm);
+}
+
+/* ─── Tree header ─── */
+.tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-xs) var(--space-md);
+  margin-bottom: var(--space-xs);
+}
+
+.tree-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.tree-action {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.tree-action:hover {
+  color: var(--color-text);
+  background: var(--color-bg-hover);
+}
+
+.tree-empty, .tree-loading {
+  padding: var(--space-md);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.tree-list {
+  padding: 0 var(--space-sm);
+  list-style: none;
+}
+
+/* ─── Tree item: flex row with min-width for truncation ─── */
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-md);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.tree-item:hover {
+  background: var(--color-bg-hover);
+}
+
+.tree-item.active {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+/* ─── Connection name: truncate with ellipsis ─── */
+.conn-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex-shrink: 1;
+  flex: 1;
+}
+
+/* ─── Connection host: secondary info, shrinkable ─── */
+.conn-host {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  max-width: 100px;
+}
+
+/* ─── Action buttons in tree items: never shrink ─── */
+.conn-play,
+.conn-delete,
+.conn-stop,
+.tree-action {
+  flex-shrink: 0;
+}
+
+.tree-error {
+  margin: var(--space-xs) var(--space-sm) var(--space-sm) 20px;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.conn-badge {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conn-badge.mysql { background: #00758f; }
+.conn-badge.postgres { background: #336791; }
+.conn-badge.sqlite { background: #003b57; }
+
+/* ─── Tab title ─── */
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* ─── Schema tree ─── */
+.schema-table {
+  font-weight: 500;
+}
+
+.tree-sublist {
+  padding-left: var(--space-lg);
+  list-style: none;
+}
+
+.schema-column {
+  font-size: var(--font-size-sm);
+  padding-left: var(--space-xl);
+}
+
+.col-name {
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.col-type {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.col-pk {
+  font-size: 10px;
+  color: var(--color-primary);
+  font-weight: 600;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: rgba(76, 154, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.tree-count {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+
+/* ─── Connection status dot ─── */
+.conn-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.conn-status-dot.connected {
+  background: var(--color-success);
+}
+
+/* ─── Connect play button ─── */
+.conn-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 2px;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.tree-item:hover .conn-play {
+  opacity: 1;
+}
+
+.conn-play:hover {
+  color: var(--color-success);
+  background: rgba(81, 207, 102, 0.15);
+}
+
+/* ─── Delete button ─── */
+.conn-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 2px;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.tree-item:hover .conn-delete {
+  opacity: 1;
+}
+
+.conn-delete:hover {
+  color: var(--color-error);
+  background: rgba(255, 107, 107, 0.15);
+}
+
+/* ─── Delete confirmation inline ─── */
+.delete-confirm {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.delete-confirm-yes,
+.delete-confirm-no {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.delete-confirm-yes {
+  background: rgba(255, 107, 107, 0.2);
+  color: var(--color-error);
+}
+
+.delete-confirm-yes:hover {
+  background: rgba(255, 107, 107, 0.35);
+}
+
+.delete-confirm-no {
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+}
+
+.delete-confirm-no:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+/* ─── Misc ─── */
+.spin {
+  animation: spin 1s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.toggle-chevron {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.toggle-chevron:hover {
+  background: var(--color-bg-hover);
+}
+
+/* ─── Database checkbox in ConnectionTree ─── */
+.db-checkbox-row {
+  gap: var(--space-xs);
+}
+
+.db-checkbox-row.selected {
+  color: var(--color-primary);
+}
+
+.db-checkbox-row .col-name {
+  flex: none;
+  max-width: none;
+}
+
+.db-checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ─── Database node in SchemaTree ─── */
+.schema-database {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.schema-database:hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}

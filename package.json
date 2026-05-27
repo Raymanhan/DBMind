@@ -1,82 +1,45 @@
 {
   "name": "dbmind",
   "version": "0.2.4",
-  "description": "AI-powered database management desktop app",
+  "description": "AI Native SQL Workspace",
   "author": "DBMind Team",
-  "main": "dist-electron/electron/main.js",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
-    "build:electron": "tsc -p tsconfig.electron.json",
-    "electron:dev": "npm run build:electron && concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
-    "build": "tsc && vite build && npm run build:electron",
-    "pack": "npm run build && electron-builder",
-    "pack:dir": "npm run build && electron-builder --dir",
+    "build": "tsc --noEmit && vite build",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "npm run build && tauri build",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit"
   },
-  "build": {
-    "appId": "com.dbmind.app",
-    "productName": "DBMind",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "dist-electron/**/*",
-      "package.json"
-    ],
-    "icon": "build/icon.png",
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "category": "public.app-category.developer-tools",
-      "icon": "build/icon.png",
-      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "build/icon.png"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "icon": "build/icon.png"
-    }
-  },
   "dependencies": {
+    "@glideapps/glide-data-grid": "^6.0.3",
+    "@monaco-editor/react": "^4.7.0",
+    "@tanstack/react-query": "^5.100.14",
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-fs": "^2.5.1",
+    "@tauri-apps/plugin-shell": "^2.3.5",
+    "@types/lodash": "^4.17.24",
     "@vitejs/plugin-react": "^5.0.0",
     "i18next": "^26.2.0",
+    "lodash": "^4.18.1",
     "lucide-react": "^0.468.0",
     "monaco-editor": "^0.55.1",
-    "mysql2": "^3.15.3",
-    "pg": "^8.16.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-i18next": "^17.0.8",
-    "sql-formatter": "^15.8.0",
-    "zustand": "^5.0.8"
+    "react-markdown": "^10.1.0",
+    "react-responsive-carousel": "^3.2.23",
+    "remark-gfm": "^4.0.1",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
-    "@types/node": "^24.10.0",
-    "@types/pg": "^8.15.6",
+    "@tauri-apps/cli": "^2",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "concurrently": "^9.2.1",
-    "electron": "^42.2.0",
-    "electron-builder": "^26.8.1",
     "typescript": "^5.9.3",
-    "vite": "^7.2.4",
-    "wait-on": "^9.0.1"
+    "vite": "^7.2.4"
   }
 }
