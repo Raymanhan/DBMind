@@ -54,6 +54,29 @@ pub fn quote_identifiers(sql: &str) -> String {
                 result.push('"');
                 i += 1;
             }
+        } else if c == '-' && i + 1 < len && chars[i + 1] == '-' {
+            // Line comment: copy everything until end of line as-is
+            while i < len && chars[i] != '\n' {
+                result.push(chars[i]);
+                i += 1;
+            }
+        } else if c == '/' && i + 1 < len && chars[i + 1] == '*' {
+            // Block comment: copy everything until */ as-is
+            result.push(chars[i]);
+            i += 1;
+            result.push(chars[i]);
+            i += 1;
+            while i < len {
+                if chars[i] == '*' && i + 1 < len && chars[i + 1] == '/' {
+                    result.push(chars[i]);
+                    i += 1;
+                    result.push(chars[i]);
+                    i += 1;
+                    break;
+                }
+                result.push(chars[i]);
+                i += 1;
+            }
         } else if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
             // Collect the full word from the chars Vec, then write it as a String
             let start = i;
@@ -147,6 +170,30 @@ mod tests {
         let sql = "SELECT * FROM auth-cloud.users WHERE name = 'auth-cloud'";
         let result = quote_identifiers(sql);
         assert_eq!(result, "SELECT * FROM `auth-cloud`.users WHERE name = 'auth-cloud'");
+    }
+
+    #[test]
+    fn test_line_comment_preserved() {
+        let sql = "SELECT 1 -- this is a comment";
+        assert_eq!(quote_identifiers(sql), "SELECT 1 -- this is a comment");
+    }
+
+    #[test]
+    fn test_line_comment_with_following_sql() {
+        let sql = "SELECT 1 -- comment\nWHERE id = 1";
+        assert_eq!(quote_identifiers(sql), "SELECT 1 -- comment\nWHERE id = 1");
+    }
+
+    #[test]
+    fn test_line_comment_with_semicolon() {
+        let sql = "SELECT 1 -- ; not a separator\nFROM users;";
+        assert_eq!(quote_identifiers(sql), "SELECT 1 -- ; not a separator\nFROM users;");
+    }
+
+    #[test]
+    fn test_block_comment_preserved() {
+        let sql = "SELECT /* comment */ 1";
+        assert_eq!(quote_identifiers(sql), "SELECT /* comment */ 1");
     }
 
     #[test]

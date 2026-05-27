@@ -15,7 +15,7 @@ export async function connect(config: ConnectionConfig): Promise<string> {
 }
 
 export async function disconnect(connectionId: string): Promise<void> {
-  return invoke('disconnect', { connectionId });
+  return invoke('disconnect', { connection_id: connectionId });
 }
 
 export async function testConnection(config: ConnectionConfig): Promise<boolean> {
@@ -31,7 +31,7 @@ export async function deleteConnection(id: string): Promise<void> {
 }
 
 export async function listDatabases(connectionId: string): Promise<string[]> {
-  return invoke('list_databases', { connectionId });
+  return invoke('list_databases', { connection_id: connectionId });
 }
 
 // ─── Query ──────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ export async function executeQuery(
   sql: string,
   queryId?: string,
 ): Promise<QueryResultMeta> {
-  return invoke('execute_query', { connectionId, sql, queryId: queryId ?? null });
+  return invoke('execute_query', { connection_id: connectionId, sql, query_id: queryId ?? null });
 }
 
 export async function fetchCells(
@@ -50,11 +50,11 @@ export async function fetchCells(
   colStart: number,
   colEnd: number,
 ): Promise<CellBlock> {
-  return invoke('fetch_cells', { queryId, rowStart, rowEnd, colStart, colEnd });
+  return invoke('fetch_cells', { query_id: queryId, row_start: rowStart, row_end: rowEnd, col_start: colStart, col_end: colEnd });
 }
 
 export async function cancelQuery(queryId: string): Promise<void> {
-  return invoke('cancel_query', { queryId });
+  return invoke('cancel_query', { query_id: queryId });
 }
 
 // ─── Schema ─────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ export async function refreshSchema(
   connectionId: string,
   database: string,
 ): Promise<void> {
-  return invoke('refresh_schema', { connectionId, database });
+  return invoke('refresh_schema', { connection_id: connectionId, database });
 }
 
 export async function generateDdl(
@@ -107,12 +107,12 @@ export async function aiChat(
   return invoke('chat', {
     database,
     messages,
-    currentSql: currentSql ?? null,
-    pinnedDdl: pinnedDdl ?? null,
-    apiKey: apiKey ?? null,
+    current_sql: currentSql ?? null,
+    pinned_ddl: pinnedDdl ?? null,
+    api_key: apiKey ?? null,
     model: model ?? null,
-    apiUrl: apiUrl ?? null,
-    maxTokens: maxTokens ?? null,
+    api_url: apiUrl ?? null,
+    max_tokens: maxTokens ?? null,
     temperature: temperature ?? null,
   });
 }
@@ -129,10 +129,10 @@ export async function nl2sql(
   return invoke('nl2sql', {
     database,
     question,
-    apiKey: apiKey ?? null,
+    api_key: apiKey ?? null,
     model: model ?? null,
-    apiUrl: apiUrl ?? null,
-    maxTokens: maxTokens ?? null,
+    api_url: apiUrl ?? null,
+    max_tokens: maxTokens ?? null,
     temperature: temperature ?? null,
   });
 }
@@ -147,10 +147,10 @@ export async function explainSql(
 ): Promise<string> {
   return invoke('explain_sql', {
     sql,
-    apiKey: apiKey ?? null,
+    api_key: apiKey ?? null,
     model: model ?? null,
-    apiUrl: apiUrl ?? null,
-    maxTokens: maxTokens ?? null,
+    api_url: apiUrl ?? null,
+    max_tokens: maxTokens ?? null,
     temperature: temperature ?? null,
   });
 }
