@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. v0.2.4)'
+        description: 'Release version (e.g. v0.2.6)'
         required: true
-        default: 'v0.2.4'
+        default: 'v0.2.6'
 
 jobs:
   build:
@@ -69,7 +69,7 @@ jobs:
         shell: bash
         run: |
           echo "=== Bundle files for ${{ matrix.target }} ==="
-          find src-tauri/target -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.AppImage' -o -name '*.deb' \) 2>/dev/null || echo "No bundle files found"
+          find src-tauri/target -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*.AppImage' -o -name '*.deb' \) 2>/dev/null || echo "No bundle files found"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -94,29 +94,50 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: List and flatten artifacts
+      - name: Rename packages and publish
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
         run: |
-          echo "=== Downloaded artifacts ==="
-          find artifacts -type f | head -30
-          mkdir -p release
-          find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} release/ \;
-
-      - name: Rename packages
-        shell: bash
-        run: |
-          cd release
+          set -euo pipefail
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           echo "Version: $VERSION"
 
-          # macOS ARM
-          for f in *_aarch64.dmg; do
-            [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_macos_arm64.dmg"
-          done
-          # macOS Intel
-          for f in *_x64.dmg; do
-            [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_macos_intel.dmg"
-          done
+          mkdir -p release
+          find artifacts -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*.AppImage' -o -name '*.deb' \) -exec cp {} release/ \;
+
+          cd release
+          # Rename macOS ARM
+          for f in *_aarch64.dmg; do [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_macos_arm64.dmg"; done
+          # Rename macOS Intel
+          for f in *_x64.dmg; do [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_macos_intel.dmg"; done
+          # Rename Windows MSI
+          for f in *.msi; do [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_windows_x64.msi"; done
+          # Rename Linux AppImage
+          for f in *.AppImage; do [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_linux_x64.AppImage"; done
+          # Rename Linux deb
+          for f in *.deb; do [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_linux_amd64.deb"; done
+
+          echo "=== Final release files ==="
+          ls -lh
+
+          shopt -s nullglob
+          FILES=(*)
+          echo "Found ${#FILES[@]} package(s)"
+
+          if [[ "${#FILES[@]}" -eq 0 ]]; then
+            echo "::error::No release packages found."
+            exit 1
+          fi
+
+          NOTES="## DBMind ${VERSION}
+
+          ### Downloads
+          - **macOS**: DBMind_${VERSION}_macos_arm64.dmg (Apple Silicon) or DBMind_${VERSION}_macos_intel.dmg (Intel)
+          - **Windows**: DBMind_${VERSION}_windows_x64.msi
+          - **Linux**: DBMind_${VERSION}_linux_x64.AppImage or DBMind_${VERSION}_linux_amd64.deb
+
+          > Built automatically by CI from source."
 
           if gh release view "$VERSION" --repo Raymanhan/DBMind > /dev/null 2>&1; then
             echo "Release $VERSION exists, uploading assets..."
@@ -126,14 +147,7 @@ jobs:
             gh release create "$VERSION" "${FILES[@]}" \
               --repo Raymanhan/DBMind \
               --title "DBMind $VERSION" \
-              --notes "## DBMind $VERSION
-
-          ### Downloads
-          - **macOS**: \`DBMind_${VERSION}_macos_arm64.dmg\` (Apple Silicon) or \`DBMind_${VERSION}_macos_intel.dmg\` (Intel)
-          - **Windows**: `DBMind_${VERSION}_windows_x64.msi`
-          - **Linux**: \`DBMind_${VERSION}_linux_x64.AppImage\` or \`DBMind_${VERSION}_linux_amd64.deb\`
-
-          > Built automatically by CI from source." \
+              --notes "$NOTES" \
               --target main \
               --latest
           fi
