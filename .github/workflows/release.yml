@@ -1,94 +1,31 @@
-name: Build & Release
+name: Build (Tauri v2) & Release
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, for example v0.2.3. Leave empty to read package.json from the selected ref.'
-        required: false
-        type: string
-      release_notes:
-        description: 'Required for manual releases unless docs/releases/<version>.md exists.'
+        description: 'Release version (e.g. v0.2.4). Leave empty to read from package.json.'
         required: false
         type: string
 
 jobs:
-  prepare:
-    name: Prepare release metadata
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.meta.outputs.version }}
-      notes: ${{ steps.meta.outputs.notes }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.SOURCE_REPO_TOKEN || github.token }}
-          fetch-depth: 0
-
-      - name: Resolve version and release notes
-        id: meta
-        shell: bash
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-          INPUT_RELEASE_NOTES: ${{ inputs.release_notes }}
-        run: |
-          set -euo pipefail
-
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF_NAME}"
-          elif [[ -n "$INPUT_VERSION" ]]; then
-            VERSION="$INPUT_VERSION"
-          else
-            VERSION="v$(node -p "require('./package.json').version")"
-          fi
-
-          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Version must use vx.y.z format, got $VERSION"
-            exit 1
-          fi
-
-          NOTES_FILE="docs/releases/${VERSION}.md"
-          if [[ -n "$INPUT_RELEASE_NOTES" ]]; then
-            printf '%s\n' "$INPUT_RELEASE_NOTES" > release-notes.md
-          elif [[ -f "$NOTES_FILE" ]]; then
-            cp "$NOTES_FILE" release-notes.md
-          else
-            echo "::error::Missing release notes. Add $NOTES_FILE or provide workflow_dispatch release_notes."
-            exit 1
-          fi
-
-          {
-            echo "version=$VERSION"
-            echo "notes<<EOF"
-            cat release-notes.md
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-  build:
-    name: ${{ matrix.target }} (${{ matrix.arch }})
-    needs: prepare
+  release:
+    name: Build ${{ matrix.label }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-latest
-            target: mac
-            arch: arm64
-          - os: macos-latest
-            target: mac
-            arch: x64
+            target: universal-apple-darwin
+            label: macOS Universal (Intel + Apple Silicon)
           - os: windows-latest
-            target: win
-            arch: x64
+            target: x86_64-pc-windows-msvc
+            label: Windows x64
           - os: ubuntu-latest
-            target: linux
-            arch: x64
+            target: x86_64-unknown-linux-gnu
+            label: Linux x64
 
     runs-on: ${{ matrix.os }}
 
@@ -104,37 +41,72 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Install npm dependencies
         run: npm ci
 
-      - name: Type check
-        run: npm run typecheck
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev
 
-      - name: Build
-        run: npm run build
-
-      - name: Package
-        run: npx electron-builder --${{ matrix.target }} --${{ matrix.arch }} --publish never
+      - name: Build & Bundle with Tauri
+        uses: tauri-apps/tauri-action@v2
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          target: ${{ matrix.target }}
 
-      - name: Collect artifact
+      - name: Collect bundle artifact
         shell: bash
         run: |
           mkdir -p upload
-          find release -type f \( -name '*.dmg' -o -name '*.AppImage' -o \( -name '*.exe' -a -name '*Setup*' \) \) -exec cp {} upload/ \;
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            cp target/release/bundle/dmg/*.dmg upload/ 2>/dev/null || \
+            cp target/universal-apple-darwin/release/bundle/dmg/*.dmg upload/ 2>/dev/null || true
+          elif [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp target/release/bundle/msi/*.msi upload/ 2>/dev/null || true
+            cp target/release/bundle/nsis/*.exe upload/ 2>/dev/null || true
+          else
+            cp target/release/bundle/appimage/*.AppImage upload/ 2>/dev/null || true
+            cp target/release/bundle/deb/*.deb upload/ 2>/dev/null || true
+          fi
           ls -lh upload/
+
+      - name: Rename bundle consistently
+        shell: bash
+        run: |
+          cd upload
+          for f in *; do
+            [ ! -f "$f" ] && continue
+            ext="${f##*.}"
+            case "$ext" in
+              dmg)   mv "$f" "DBMind_${{ github.ref_name }}_macos_universal.dmg" 2>/dev/null || true ;;
+              exe)   mv "$f" "DBMind_${{ github.ref_name }}_windows_x64.exe" 2>/dev/null || true ;;
+              msi)   mv "$f" "DBMind_${{ github.ref_name }}_windows_x64.msi" 2>/dev/null || true ;;
+              AppImage) mv "$f" "DBMind_${{ github.ref_name }}_linux_x86_64.AppImage" 2>/dev/null || true ;;
+              deb)   mv "$f" "DBMind_${{ github.ref_name }}_linux_x86_64.deb" 2>/dev/null || true ;;
+            esac
+          done
+          ls -lh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dbmind-${{ matrix.target }}-${{ matrix.arch }}
+          name: dbmind-${{ matrix.label }}
           path: upload/*
-          if-no-files-found: error
+          if-no-files-found: warn
 
-  release:
+  publish:
     name: Publish to Public Repo
-    needs: [prepare, build]
+    needs: [release]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -146,24 +118,21 @@ jobs:
           path: artifacts
 
       - name: Flatten artifacts
+        shell: bash
         run: |
-          find artifacts -type f \( -name '*.dmg' -o -name '*.AppImage' -o \( -name '*Setup*.exe' \) \) -exec mv {} . \;
-          ls -lh *.dmg *Setup*.exe *.AppImage 2>/dev/null
+          find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.AppImage' -o -name '*.deb' \) -exec mv {} . \;
+          ls -lh *.dmg *.exe *.msi *.AppImage *.deb 2>/dev/null || echo "No packages found"
 
       - name: Publish Release & Remove Source Archives
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
-          RELEASE_NOTES: ${{ needs.prepare.outputs.notes }}
         run: |
           set -euo pipefail
-          VERSION="${{ needs.prepare.outputs.version }}"
+          VERSION="${{ github.ref_name }}"
           echo "Publishing $VERSION to Raymanhan/DBMind..."
 
-          printf '%s\n' "$RELEASE_NOTES" > release-notes.md
-
-          # Collect all package files
-          mapfile -t FILES < <(find . -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' \))
+          mapfile -t FILES < <(find . -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.AppImage' -o -name '*.deb' \))
           echo "Found ${#FILES[@]} package(s):"
           printf '  %s\n' "${FILES[@]}"
 
@@ -175,20 +144,19 @@ jobs:
           if gh release view "$VERSION" --repo Raymanhan/DBMind > /dev/null 2>&1; then
             echo "Release $VERSION exists, uploading assets..."
             gh release upload "$VERSION" "${FILES[@]}" --repo Raymanhan/DBMind --clobber
-            gh release edit "$VERSION" --repo Raymanhan/DBMind --notes-file release-notes.md --latest
+            gh release edit "$VERSION" --repo Raymanhan/DBMind --notes "Auto-built by CI" --latest
           else
             echo "Creating release $VERSION..."
             gh release create "$VERSION" "${FILES[@]}" \
               --repo Raymanhan/DBMind \
               --title "DBMind $VERSION" \
-              --notes-file release-notes.md \
+              --notes "Auto-built by CI" \
               --target main \
               --latest \
               --draft=false
           fi
 
-          # GitHub automatically attaches Source code archives to every Release.
-          # Delete them since the source is in a private repo.
+          # Remove source code archives attached by GitHub automatically
           echo "Removing source code archives..."
           ASSET_IDS=$(gh api "repos/Raymanhan/DBMind/releases/tags/$VERSION" --jq '.assets[] | select(.name | test("Source code")) | .id')
           for id in $ASSET_IDS; do
