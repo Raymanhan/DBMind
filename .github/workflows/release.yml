@@ -15,14 +15,17 @@ jobs:
           - os: macos-latest
             target: universal-apple-darwin
             label: macOS Universal (Intel + Apple Silicon)
+            rust_targets: 'aarch64-apple-darwin x86_64-apple-darwin'
             bundle_ext: dmg
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             label: Windows x64
+            rust_targets: 'x86_64-pc-windows-msvc'
             bundle_ext: 'msi exe'
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             label: Linux x64
+            rust_targets: 'x86_64-unknown-linux-gnu'
             bundle_ext: 'AppImage deb'
 
     runs-on: ${{ matrix.os }}
@@ -42,7 +45,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.rust_targets }}
 
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
@@ -69,7 +72,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p upload
-          # Search for bundles in target directory
           for ext in ${{ matrix.bundle_ext }}; do
             find target -name "*.${ext}" -exec cp {} upload/ \; 2>/dev/null || true
           done
