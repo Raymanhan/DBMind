@@ -12,7 +12,7 @@ members = [
 
 [package]
 name = "dbmind"
-version = "0.2.5"
+version = "0.2.6"
 description = "AI Native SQL Workspace"
 authors = ["DBMind Team"]
 license = "MIT"

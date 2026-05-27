@@ -77,7 +77,6 @@ jobs:
           name: ${{ matrix.name }}
           path: |
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
@@ -118,44 +117,6 @@ jobs:
           for f in *_x64.dmg; do
             [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_macos_intel.dmg"
           done
-          # Windows NSIS installer
-          for f in *-setup.exe; do
-            [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_windows_x64_setup.exe"
-          done
-          # Windows MSI
-          for f in *.msi; do
-            [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_windows_x64.msi"
-          done
-          # Linux AppImage
-          for f in *.AppImage; do
-            [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_linux_x64.AppImage"
-          done
-          # Linux deb
-          for f in *.deb; do
-            [ -f "$f" ] && mv "$f" "DBMind_${VERSION}_linux_amd64.deb"
-          done
-
-          echo "=== Final release files ==="
-          ls -lh
-
-      - name: Create GitHub Release on Public Repo
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
-        run: |
-          set -euo pipefail
-          VERSION="${{ github.event.inputs.version || github.ref_name }}"
-          echo "Publishing $VERSION to Raymanhan/DBMind..."
-
-          shopt -s nullglob
-          FILES=(release/*)
-          echo "Found ${#FILES[@]} package(s):"
-          printf '  %s\n' "${FILES[@]}"
-
-          if [[ "${#FILES[@]}" -eq 0 ]]; then
-            echo "::error::No release packages found."
-            exit 1
-          fi
 
           if gh release view "$VERSION" --repo Raymanhan/DBMind > /dev/null 2>&1; then
             echo "Release $VERSION exists, uploading assets..."
@@ -169,7 +130,7 @@ jobs:
 
           ### Downloads
           - **macOS**: \`DBMind_${VERSION}_macos_arm64.dmg\` (Apple Silicon) or \`DBMind_${VERSION}_macos_intel.dmg\` (Intel)
-          - **Windows**: \`DBMind_${VERSION}_windows_x64_setup.exe\` (installer) or \`DBMind_${VERSION}_windows_x64.msi\`
+          - **Windows**: `DBMind_${VERSION}_windows_x64.msi`
           - **Linux**: \`DBMind_${VERSION}_linux_x64.AppImage\` or \`DBMind_${VERSION}_linux_amd64.deb\`
 
           > Built automatically by CI from source." \

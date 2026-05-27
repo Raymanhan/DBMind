@@ -589,3 +589,48 @@
     opacity: 1;
   }
 }
+/* ─── Model switcher ─── */
+.ai-model-switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 2px 6px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.ai-model-switcher:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.ai-model-switcher svg:first-child {
+  flex-shrink: 0;
+}
+
+.ai-model-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 0;
+  outline: none;
+  cursor: pointer;
+  max-width: 140px;
+}
+
+.ai-model-select option {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

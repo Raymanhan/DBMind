@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use dbmind_core::errors::DbError;
 use dbmind_core::types::*;
+use std::collections::HashMap;
 use std::time::Instant;
 use tokio::sync::Mutex;
 
@@ -10,6 +11,7 @@ pub struct PostgresDriver {
     client: Mutex<Option<tokio_postgres::Client>>,
     _handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     schema_name: std::sync::OnceLock<String>,
+    cancel_tokens: Mutex<HashMap<String, tokio_postgres::CancelToken>>,
 }
 
 impl PostgresDriver {
@@ -18,6 +20,7 @@ impl PostgresDriver {
             client: Mutex::new(None),
             _handle: Mutex::new(None),
             schema_name: std::sync::OnceLock::new(),
+            cancel_tokens: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -38,14 +41,28 @@ fn build_column_meta(col: &tokio_postgres::Column) -> ColumnMeta {
 #[async_trait]
 impl Driver for PostgresDriver {
     async fn connect(&self, config: &ConnectionConfig) -> Result<(), DbError> {
-        let conn_str = format!(
-            "host={} port={} user={} password={} dbname={}",
-            config.host,
-            config.port,
-            config.username,
-            config.password.as_deref().unwrap_or(""),
-            config.database.as_deref().unwrap_or("postgres")
-        );
+        let mut params: Vec<(&str, String)> = vec![
+            ("host", config.host.clone()),
+            ("port", config.port.to_string()),
+            ("user", config.username.clone()),
+        ];
+
+        if let Some(ref pw) = config.password {
+            params.push(("password", pw.clone()));
+        }
+
+        let dbname = config.database.as_deref().unwrap_or("postgres");
+        params.push(("dbname", dbname.to_string()));
+
+        if config.ssl {
+            params.push(("sslmode", "require".to_string()));
+        }
+
+        let conn_str = params
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join(" ");
 
         let (client, connection) = tokio_postgres::connect(&conn_str, tokio_postgres::NoTls)
             .await
@@ -56,6 +73,12 @@ impl Driver for PostgresDriver {
                 log::error!("PostgreSQL connection error: {}", e);
             }
         });
+
+        // Test the connection
+        client
+            .execute("SELECT 1", &[])
+            .await
+            .map_err(|e| DbError::ConnectionFailed(format!("Connection test failed: {}", e)))?;
 
         let mut stored_client = self.client.lock().await;
         *stored_client = Some(client);
@@ -70,7 +93,10 @@ impl Driver for PostgresDriver {
 
     async fn disconnect(&self) -> Result<(), DbError> {
         let mut client_guard = self.client.lock().await;
-        *client_guard = None;
+        if let Some(client) = client_guard.take() {
+            let _ = client.execute("SELECT 1", &[]).await; // best-effort
+            drop(client);
+        }
         let mut handle_guard = self._handle.lock().await;
         if let Some(h) = handle_guard.take() {
             h.abort();
@@ -79,65 +105,100 @@ impl Driver for PostgresDriver {
     }
 
     async fn exec(&self, sql: &str) -> Result<QueryResult, DbError> {
+        self.exec_with_query_id("", sql).await
+    }
+
+    async fn exec_with_query_id(&self, query_id: &str, sql: &str) -> Result<QueryResult, DbError> {
         let start = Instant::now();
-        let client_lock = self.client.lock().await;
-        let client = client_lock.as_ref().ok_or(DbError::NotConnected)?;
 
-        let trimmed = sql.trim().to_uppercase();
-        let is_query = trimmed.starts_with("SELECT")
-            || trimmed.starts_with("WITH")
-            || trimmed.starts_with("SHOW")
-            || trimmed.starts_with("EXPLAIN");
+        let (columns, data, affected) = {
+            let client_lock = self.client.lock().await;
+            let client = client_lock.as_ref().ok_or(DbError::NotConnected)?;
 
-        if is_query {
-            let statement = client
-                .prepare(sql)
-                .await
-                .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+            // Store cancel token for this query
+            if !query_id.is_empty() {
+                let token = client.cancel_token();
+                self.cancel_tokens.lock().await.insert(query_id.to_string(), token);
+            }
 
-            let columns: Vec<ColumnMeta> =
-                statement.columns().iter().map(build_column_meta).collect();
+            let trimmed = sql.trim().to_uppercase();
+            let is_query = trimmed.starts_with("SELECT")
+                || trimmed.starts_with("WITH")
+                || trimmed.starts_with("SHOW")
+                || trimmed.starts_with("EXPLAIN")
+                || trimmed.starts_with("TABLE")
+                || trimmed.starts_with("VALUES");
 
-            let rows = client
-                .query(&statement, &[])
-                .await
-                .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+            if is_query {
+                let statement = client
+                    .prepare(sql)
+                    .await
+                    .map_err(|e| DbError::QueryFailed(e.to_string()))?;
 
-            let data: Vec<Vec<CellValue>> = rows
-                .iter()
-                .map(|row| {
-                    (0..row.len())
-                        .map(|i| {
-                            let col_type = row.columns()[i].type_();
-                            cell_from_pg(row, i, col_type)
-                        })
-                        .collect()
-                })
-                .collect();
+                let columns: Vec<ColumnMeta> =
+                    statement.columns().iter().map(build_column_meta).collect();
 
-            drop(client_lock);
-            let elapsed = start.elapsed().as_millis() as u64;
-            Ok(QueryResult {
-                columns,
-                rows: data,
+                let rows = client
+                    .query(&statement, &[])
+                    .await
+                    .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+
+                let data: Vec<Vec<CellValue>> = rows
+                    .iter()
+                    .map(|row| {
+                        (0..row.len())
+                            .map(|i| {
+                                let col_type = row.columns()[i].type_();
+                                cell_from_pg(row, i, col_type)
+                            })
+                            .collect()
+                    })
+                    .collect();
+
+                (Some(columns), Some(data), None)
+            } else {
+                let affected = client
+                    .execute(sql, &[])
+                    .await
+                    .map_err(|e| DbError::QueryFailed(e.to_string()))?;
+                (None, None, Some(affected))
+            }
+        }; // client_lock dropped here
+
+        let elapsed = start.elapsed().as_millis() as u64;
+
+        if !query_id.is_empty() {
+            self.cancel_tokens.lock().await.remove(query_id);
+        }
+
+        match (columns, data, affected) {
+            (Some(cols), Some(rows), None) => Ok(QueryResult {
+                columns: cols,
+                rows,
                 affected_rows: None,
                 execution_time_ms: elapsed,
-            })
-        } else {
-            let affected = client
-                .execute(sql, &[])
-                .await
-                .map_err(|e| DbError::QueryFailed(e.to_string()))?;
-
-            drop(client_lock);
-            let elapsed = start.elapsed().as_millis() as u64;
-            Ok(QueryResult {
+            }),
+            (None, None, Some(n)) => Ok(QueryResult {
                 columns: vec![],
                 rows: vec![],
-                affected_rows: Some(affected),
+                affected_rows: Some(n),
                 execution_time_ms: elapsed,
-            })
+            }),
+            _ => Err(DbError::QueryFailed("Unexpected result state".to_string())),
         }
+    }
+
+    async fn cancel_query(&self, query_id: &str) -> Result<(), DbError> {
+        let token = self.cancel_tokens.lock().await.remove(query_id);
+        if let Some(ct) = token {
+            log::info!("Cancelling PostgreSQL query {}", query_id);
+            ct.cancel_query(tokio_postgres::NoTls)
+                .await
+                .map_err(|e| DbError::DriverError(e.to_string()))?;
+        } else {
+            log::warn!("No cancel token found for PostgreSQL query {}", query_id);
+        }
+        Ok(())
     }
 
     async fn is_connected(&self) -> bool {
@@ -191,7 +252,6 @@ fn cell_from_pg(
             None => CellValue::Null,
         },
         Type::NUMERIC => {
-            // NUMERIC comes as text from tokio-postgres by default
             match row.try_get::<_, Option<String>>(idx) {
                 Ok(Some(s)) => s
                     .parse::<f64>()
@@ -210,7 +270,12 @@ fn cell_from_pg(
         | Type::TIMESTAMPTZ
         | Type::UUID
         | Type::JSON
-        | Type::JSONB => match row.try_get::<_, Option<String>>(idx) {
+        | Type::JSONB
+        | Type::INET
+        | Type::CIDR
+        | Type::MACADDR
+        | Type::POINT
+        | Type::INTERVAL => match row.try_get::<_, Option<String>>(idx) {
             Ok(Some(s)) => CellValue::String(s),
             _ => CellValue::Null,
         },
@@ -218,8 +283,18 @@ fn cell_from_pg(
             Ok(Some(b)) => CellValue::Blob(b),
             _ => CellValue::Null,
         },
+        Type::BOOL_ARRAY
+        | Type::INT2_ARRAY
+        | Type::INT4_ARRAY
+        | Type::INT8_ARRAY
+        | Type::FLOAT4_ARRAY
+        | Type::FLOAT8_ARRAY
+        | Type::TEXT_ARRAY
+        | Type::VARCHAR_ARRAY => match row.try_get::<_, Option<String>>(idx) {
+            Ok(Some(s)) => CellValue::String(s),
+            _ => CellValue::Null,
+        },
         _ => {
-            // Fallback: try to get as string
             match row.try_get::<_, Option<String>>(idx) {
                 Ok(Some(s)) => CellValue::String(s),
                 _ => CellValue::Null,

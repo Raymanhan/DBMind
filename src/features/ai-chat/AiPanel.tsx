@@ -1,9 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Bot } from 'lucide-react';
+import { Bot, ChevronDown, Cpu } from 'lucide-react';
 import { useTauriEvents } from '../../shared/hooks/useTauriEvents';
 import { useChatStore } from '../../shared/stores/chatStore';
 import { useConnectionStore } from '../../shared/stores/connectionStore';
 import { useEditorStore } from '../../shared/stores/editorStore';
+import { useSettingsStore } from '../../shared/stores/settingsStore';
 import { AiConversationHeader } from './AiConversationHeader';
 import { AiMessageBubble } from './AiMessageBubble';
 import { AiInputBar } from './AiInputBar';
@@ -23,6 +24,11 @@ export function AiPanel() {
   const activeTab = useEditorStore((s) =>
     s.tabs.find((t) => t.id === useEditorStore.getState().activeTabId),
   );
+
+  const aiConnections = useSettingsStore((s) => s.ai.connections);
+  const aiActiveId = useSettingsStore((s) => s.ai.activeId);
+  const setActiveAiId = useSettingsStore((s) => s.setActiveId);
+  const activeAi = aiConnections.find((c) => c.id === aiActiveId) ?? aiConnections[0];
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const streamBuffer = useRef<string>('');
@@ -75,6 +81,21 @@ export function AiPanel() {
       <div className="ai-panel-header">
         <Bot size={16} />
         <span>AI Assistant</span>
+        <div className="ai-model-switcher">
+          <Cpu size={12} />
+          <select
+            className="ai-model-select"
+            value={aiActiveId}
+            onChange={(e) => setActiveAiId(e.target.value)}
+          >
+            {aiConnections.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {c.model}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={12} />
+        </div>
       </div>
 
       <AiConversationHeader
@@ -126,6 +147,7 @@ export function AiPanel() {
         <AiInputBar
           conversationId={activeConversationId}
           database={database}
+          driver={activeConnection?.driver}
           onStreamStart={handleStreamStart}
           onStreamEnd={handleStreamEnd}
         />

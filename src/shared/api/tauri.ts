@@ -103,6 +103,7 @@ export async function aiChat(
   apiUrl?: string,
   maxTokens?: number,
   temperature?: number,
+  driver?: string,
 ): Promise<string> {
   return invoke('chat', {
     database,
@@ -114,6 +115,7 @@ export async function aiChat(
     apiUrl: apiUrl ?? null,
     maxTokens: maxTokens ?? null,
     temperature: temperature ?? null,
+    driver: driver ?? null,
   });
 }
 

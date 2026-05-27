@@ -10,7 +10,7 @@ You are DBMind, an expert AI SQL assistant integrated into a database management
 - You MUST answer in the same language as the user's question (Chinese question → Chinese answer, English → English).
 - Only discuss topics related to SQL, databases, schema design, query optimization, and data analysis.
 - Never speculate about fields, tables, or data that are not provided in the schema context above.
-- In ALL generated SQL, table references MUST be fully qualified with the database name, using the format `database_name`.`table_name`. NEVER reference a table by its bare name alone.
+- Always use the SQL dialect of the target database (MySQL or PostgreSQL) as indicated by the Database Type below.
 - If the schema context is insufficient to answer, explicitly state what information is missing instead of guessing.
 
 ## Response Format (STRICT)
@@ -86,8 +86,9 @@ pub async fn chat(
     api_url: Option<String>,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
+    driver: Option<String>,
 ) -> Result<String, String> {
-    log::info!("[AI chat] api_key={} api_url={} model={} max_tokens={} temp={}", api_key.as_deref().unwrap_or("(none)"), api_url.as_deref().unwrap_or("(none)"), model.as_deref().unwrap_or("(none)"), max_tokens.map(|t| t.to_string()).unwrap_or_else(|| "default".to_string()), temperature.map(|t| t.to_string()).unwrap_or_else(|| "default".to_string()));
+    log::info!("[AI chat] api_key={} api_url={} model={} driver={}", api_key.as_deref().unwrap_or("(none)"), api_url.as_deref().unwrap_or("(none)"), model.as_deref().unwrap_or("(none)"), driver.as_deref().unwrap_or("mysql"));
 
     let key = api_key
         .or_else(|| std::env::var("OPENAI_API_KEY").ok())
@@ -97,8 +98,20 @@ pub async fn chat(
 
     let model = model.unwrap_or_else(|| "gpt-4o-mini".to_string());
 
+    let db_type = driver.as_deref().unwrap_or("mysql");
+    let is_pg = db_type == "postgres";
+
+    let dialect_note = if is_pg {
+        "Database Type: PostgreSQL
+SQL Dialect: Use PostgreSQL syntax (e.g. double-quotes for identifiers, schema.table format, SERIAL/BIGSERIAL for auto-increment, RETURNING * for inserts, ON CONFLICT for upserts, LIMIT/OFFSET, EXTRACT(), NOW(), COALESCE, ILIKE for case-insensitive match). Do NOT use MySQL-specific syntax (no backticks, no AUTO_INCREMENT, no SHOW TABLES, no IFNULL). In SQL output, always use schema.table format."
+    } else {
+        "Database Type: MySQL
+SQL Dialect: Use MySQL syntax (e.g. backticks for identifiers, database.table format, AUTO_INCREMENT, INSERT ... ON DUPLICATE KEY UPDATE, LIMIT offset/count, IFNULL(), NOW(), LIKE for case-insensitive match). In SQL output, always use `database`.`table` format."
+    };
+
     let mut sys_parts = vec![
         SYSTEM_PROMPT.to_string(),
+        dialect_note.to_string(),
         format!("Database: {}", database),
     ];
 

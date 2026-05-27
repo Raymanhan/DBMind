@@ -11,6 +11,7 @@ import type { CrossDbTableBrief } from '../../shared/api/types';
 interface Props {
   conversationId: string;
   database: string;
+  driver?: string;
   onStreamStart: () => void;
   onStreamEnd: () => void;
 }
@@ -31,7 +32,7 @@ const INITIAL_MENTION: MentionState = {
   activeIndex: 0,
 };
 
-export function AiInputBar({ conversationId, database, onStreamStart, onStreamEnd }: Props) {
+export function AiInputBar({ conversationId, database, driver, onStreamStart, onStreamEnd }: Props) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [mention, setMention] = useState<MentionState>(INITIAL_MENTION);
@@ -291,6 +292,7 @@ export function AiInputBar({ conversationId, database, onStreamStart, onStreamEn
       await aiChat(
         database, history, currentSql, allDdls,
         activeConn?.api_key, activeConn?.model, activeConn?.api_url, activeConn?.max_tokens, activeConn?.temperature,
+        driver,
       );
       onStreamEnd();
     } catch (err) {
@@ -303,7 +305,7 @@ export function AiInputBar({ conversationId, database, onStreamStart, onStreamEn
     } finally {
       setSending(false);
     }
-  }, [database, activeConn, addMessage, pinTable, onStreamStart, onStreamEnd]);
+  }, [database, driver, activeConn, addMessage, pinTable, onStreamStart, onStreamEnd]);
 
   const handleBlur = useCallback(() => {
     setTimeout(() => {

@@ -8,8 +8,8 @@ const DEFAULT_CONNECTION: AiConnection = {
   name: 'Default',
   provider: 'compatible',
   api_key: undefined,
-  api_url: undefined,
-  model: 'gpt-4o-mini',
+  api_url: 'https://api.deepseek.com/v1',
+  model: 'deepseek-v4-flash',
   max_tokens: 4096,
   temperature: 0.1,
 };

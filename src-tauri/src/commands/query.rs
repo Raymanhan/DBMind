@@ -11,8 +11,11 @@ pub async fn execute_query(
     sql: String,
     query_id: Option<String>,
 ) -> Result<QueryResultMeta, String> {
-    // Pre-process SQL: backtick-quote identifiers with hyphens (e.g. auth-cloud)
-    let quoted_sql = dbmind_sql::quote::quote_identifiers(&sql);
+    // Pre-process SQL: backtick-quote identifiers with hyphens (MySQL only)
+    let quoted_sql = match state.conn_manager.driver_type(&connection_id).await {
+        Some(DatabaseDriver::Mysql) => dbmind_sql::quote::quote_identifiers(&sql),
+        _ => sql.clone(), // PostgreSQL and others don't use backticks
+    };
 
     let query_id = query_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     events::emit_query_started(

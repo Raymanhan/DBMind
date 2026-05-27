@@ -203,4 +203,17 @@ impl SchemaIndex {
         results
     }
 
+
+    /// Update a table in-place via callback
+    pub async fn update_table<F>(&self, database: &str, table: &str, f: F)
+    where
+        F: FnOnce(&mut TableSchema),
+    {
+        let key = format!("{}.{}", database, table);
+        let mut tables = self.tables.write().await;
+        if let Some(t) = tables.get_mut(&key) {
+            f(t);
+        }
+    }
+
 }
