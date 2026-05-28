@@ -1,5 +1,5 @@
 :root {
-  /* Colors - Dark theme (default) */
+  /* ─── Dark theme (default) ─── */
   --color-bg: #1a1b1e;
   --color-bg-secondary: #25262b;
   --color-bg-tertiary: #2c2e33;
@@ -14,6 +14,11 @@
   --color-warning: #fcc419;
   --color-error: #ff6b6b;
   --color-accent: #da77f2;
+
+  /* Shadow & overlay */
+  --shadow-popup: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --overlay-bg: rgba(0, 0, 0, 0.5);
 
   /* Spacing */
   --space-xs: 4px;
@@ -42,16 +47,24 @@
   --transition: 150ms ease;
 }
 
-/* Light theme overrides */
+/* ─── Light theme ─── */
 [data-theme="light"] {
   --color-bg: #ffffff;
   --color-bg-secondary: #f8f9fa;
-  --color-bg-tertiary: #e9ecef;
-  --color-bg-hover: #dee2e6;
+  --color-bg-tertiary: #f1f3f5;
+  --color-bg-hover: #e9ecef;
   --color-border: #dee2e6;
   --color-text: #212529;
   --color-text-secondary: #495057;
   --color-text-muted: #868e96;
   --color-primary: #228be6;
   --color-primary-hover: #1c7ed6;
+  --color-success: #2b8a3e;
+  --color-warning: #e67700;
+  --color-error: #c92a2a;
+  --color-accent: #9c36b5;
+
+  --shadow-popup: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.15);
+  --overlay-bg: rgba(0, 0, 0, 0.3);
 }

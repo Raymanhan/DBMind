@@ -1,5 +1,15 @@
 import { create } from 'zustand';
 
+function loadTheme(): 'light' | 'dark' {
+  try {
+    const stored = localStorage.getItem('dbmind-theme');
+    if (stored === 'light' || stored === 'dark') return stored;
+    // Respect system preference
+    if (window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+  } catch {}
+  return 'dark';
+}
+
 interface UiState {
   theme: 'light' | 'dark';
   sidebarOpen: boolean;
@@ -18,7 +28,7 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>((set) => ({
-  theme: 'dark',
+  theme: loadTheme(),
   sidebarOpen: true,
   aiPanelOpen: true,
   settingsOpen: false,
@@ -26,7 +36,11 @@ export const useUiStore = create<UiState>((set) => ({
   editorSplitPx: null,
   aiPanelWidth: 340,
   toggleTheme: () =>
-    set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
+    set((state) => {
+      const next = state.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('dbmind-theme', next); } catch {}
+      return { theme: next };
+    }),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setAiPanelOpen: (open) => set({ aiPanelOpen: open }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
