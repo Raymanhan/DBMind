@@ -59,8 +59,8 @@ export function AiPanel() {
   }, [activeConv?.messages, showThinking]);
 
   const handleNew = useCallback(() => {
-    createConversation(database);
-  }, [createConversation, database]);
+    createConversation(database, activeConnection?.driver);
+  }, [createConversation, database, activeConnection?.driver]);
 
   const handleStreamStart = useCallback(() => {
     streamBuffer.current = '';
@@ -90,7 +90,7 @@ export function AiPanel() {
           >
             {aiConnections.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name} · {c.model}
+                {c.name}
               </option>
             ))}
           </select>
@@ -147,7 +147,7 @@ export function AiPanel() {
         <AiInputBar
           conversationId={activeConversationId}
           database={database}
-          driver={activeConnection?.driver}
+          driver={activeConv?.driver ?? activeConnection?.driver}
           onStreamStart={handleStreamStart}
           onStreamEnd={handleStreamEnd}
         />

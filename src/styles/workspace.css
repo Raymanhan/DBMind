@@ -62,7 +62,9 @@
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
+  scrollbar-width: none;
   overflow-y: hidden;
+  &::-webkit-scrollbar { display: none; }
 }
 
 .work-tab {

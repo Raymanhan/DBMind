@@ -72,7 +72,185 @@
   list-style: none;
 }
 
-/* ─── Tree item: flex row with min-width for truncation ─── */
+/* ─── Connection row ─── */
+.conn-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-md);
+  cursor: pointer;
+  min-width: 0;
+  position: relative;
+}
+
+.conn-row:hover {
+  background: var(--color-bg-hover);
+}
+
+.conn-row.active {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+/* ─── Chevron ─── */
+.conn-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.conn-chevron:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+/* ─── Status dot ─── */
+.conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+.conn-dot.connected {
+  background: var(--color-success);
+  box-shadow: 0 0 4px rgba(81, 207, 102, 0.4);
+}
+
+/* ─── Connection name ─── */
+.conn-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.conn-driver-icon {
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+/* ─── Action buttons group ─── */
+.conn-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.conn-row:hover .conn-actions {
+  opacity: 1;
+}
+
+.conn-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  transition: all var(--transition);
+}
+
+.conn-action-btn:hover {
+  color: var(--color-text);
+  background: var(--color-bg-tertiary);
+}
+
+.conn-action-btn:first-child:hover {
+  color: var(--color-success);
+  background: rgba(81, 207, 102, 0.12);
+}
+
+.conn-action-btn:last-child:hover {
+  color: var(--color-error);
+  background: rgba(255, 107, 107, 0.12);
+}
+
+/* ─── Delete confirm ─── */
+.conn-delete-confirm {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.conn-delete-confirm button {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.conn-delete-confirm button:first-child {
+  background: rgba(255, 107, 107, 0.2);
+  color: var(--color-error);
+}
+
+.conn-delete-confirm button:last-child {
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+}
+
+/* ─── Connection error ─── */
+.conn-error {
+  margin: 2px 8px 4px 28px;
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* ─── Database list under connection ─── */
+.conn-db-list {
+  padding: 2px 0 2px 28px;
+  list-style: none;
+}
+
+.conn-db-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
+
+.conn-db-item:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+}
+
+.conn-db-item.selected {
+  color: var(--color-primary);
+}
+
+.db-checkbox {
+  width: 13px;
+  height: 13px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ─── Tree item (shared for schema tree) ─── */
 .tree-item {
   display: flex;
   align-items: center;
@@ -91,62 +269,6 @@
 .tree-item.active {
   color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 14%, transparent);
-}
-
-/* ─── Connection name: truncate with ellipsis ─── */
-.conn-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  flex-shrink: 1;
-  flex: 1;
-}
-
-/* ─── Connection host: secondary info, shrinkable ─── */
-.conn-host {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex-shrink: 1;
-  max-width: 100px;
-}
-
-/* ─── Action buttons in tree items: never shrink ─── */
-.conn-play,
-.conn-delete,
-.conn-stop,
-.tree-action {
-  flex-shrink: 0;
-}
-
-.tree-error {
-  margin: var(--space-xs) var(--space-sm) var(--space-sm) 20px;
-  color: var(--color-error);
-  font-size: var(--font-size-sm);
-  line-height: 1.4;
-  word-break: break-word;
-}
-
-.conn-badge {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.conn-badge.mysql { background: #00758f; }
-.conn-badge.postgres { background: #336791; }
-.conn-badge.sqlite { background: #003b57; }
-
-/* ─── Tab title ─── */
-.tab-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
 }
 
 /* ─── Schema tree ─── */
@@ -195,98 +317,16 @@
   flex-shrink: 0;
 }
 
-
-/* ─── Connection status dot ─── */
-.conn-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-text-muted);
+.tree-action {
   flex-shrink: 0;
 }
 
-.conn-status-dot.connected {
-  background: var(--color-success);
-}
-
-/* ─── Connect play button ─── */
-.conn-play {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  border-radius: 2px;
-  color: var(--color-text-muted);
-  opacity: 0;
-  transition: all var(--transition);
-  flex-shrink: 0;
-}
-
-.tree-item:hover .conn-play {
-  opacity: 1;
-}
-
-.conn-play:hover {
-  color: var(--color-success);
-  background: rgba(81, 207, 102, 0.15);
-}
-
-/* ─── Delete button ─── */
-.conn-delete {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  border-radius: 2px;
-  color: var(--color-text-muted);
-  opacity: 0;
-  transition: all var(--transition);
-  flex-shrink: 0;
-}
-
-.tree-item:hover .conn-delete {
-  opacity: 1;
-}
-
-.conn-delete:hover {
-  color: var(--color-error);
-  background: rgba(255, 107, 107, 0.15);
-}
-
-/* ─── Delete confirmation inline ─── */
-.delete-confirm {
-  display: flex;
-  gap: 2px;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.delete-confirm-yes,
-.delete-confirm-no {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 2px;
-  cursor: pointer;
+/* ─── Tab title ─── */
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.delete-confirm-yes {
-  background: rgba(255, 107, 107, 0.2);
-  color: var(--color-error);
-}
-
-.delete-confirm-yes:hover {
-  background: rgba(255, 107, 107, 0.35);
-}
-
-.delete-confirm-no {
-  background: var(--color-bg-hover);
-  color: var(--color-text-secondary);
-}
-
-.delete-confirm-no:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
+  min-width: 0;
 }
 
 /* ─── Misc ─── */
@@ -300,41 +340,6 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-.toggle-chevron {
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  padding: 0 2px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-.toggle-chevron:hover {
-  background: var(--color-bg-hover);
-}
-
-/* ─── Database checkbox in ConnectionTree ─── */
-.db-checkbox-row {
-  gap: var(--space-xs);
-}
-
-.db-checkbox-row.selected {
-  color: var(--color-primary);
-}
-
-.db-checkbox-row .col-name {
-  flex: none;
-  max-width: none;
-}
-
-.db-checkbox {
-  width: 14px;
-  height: 14px;
-  accent-color: var(--color-primary);
-  cursor: pointer;
-  flex-shrink: 0;
 }
 
 /* ─── Database node in SchemaTree ─── */

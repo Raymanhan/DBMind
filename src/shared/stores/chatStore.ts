@@ -16,6 +16,7 @@ export interface Conversation {
   id: string;
   title: string;
   database: string;
+  driver?: string;
   messages: ChatMsg[];
   pinnedTables: PinnedTable[];
   createdAt: number;
@@ -25,7 +26,7 @@ export interface Conversation {
 interface ChatState {
   conversations: Conversation[];
   activeConversationId: string | null;
-  createConversation: (database: string) => string;
+  createConversation: (database: string, driver?: string) => string;
   deleteConversation: (id: string) => void;
   setActiveConversation: (id: string | null) => void;
   addMessage: (conversationId: string, message: ChatMsg) => void;
@@ -93,13 +94,14 @@ export const useChatStore = create<ChatState>((set) => {
     conversations,
     activeConversationId: initialActiveId,
 
-    createConversation: (database) => {
+    createConversation: (database, driver) => {
       const id = crypto.randomUUID();
       const conv: Conversation = {
         id,
         title: 'New Chat',
         database,
         messages: [],
+        driver,
         pinnedTables: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),

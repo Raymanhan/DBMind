@@ -26,6 +26,7 @@ export function WorkTabStrip() {
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const handleNewTab = () => {
@@ -75,7 +76,15 @@ export function WorkTabStrip() {
   const hasOthers = contextMenu && contextMenu.totalTabs > 1;
 
   return (
-    <div className="work-tab-strip">
+    <div
+      className="work-tab-strip"
+      ref={stripRef}
+      onWheel={(e) => {
+        if (stripRef.current) {
+          stripRef.current.scrollLeft += e.deltaY;
+        }
+      }}
+    >
       {tabs.map((tab, index) => (
         <div
           key={tab.id}

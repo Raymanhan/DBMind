@@ -17,6 +17,7 @@ import {
   Play,
   ChevronRight,
   ChevronDown,
+  Pencil,
 } from 'lucide-react';
 import type { ConnectionConfig } from '../../shared/api/types';
 
@@ -56,6 +57,8 @@ export function ConnectionTree() {
   const [connectionErrors, setConnectionErrors] = useState<Record<string, string>>({});
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; connId: string } | null>(null);
+  const [editingConfig, setEditingConfig] = useState<ConnectionConfig | null>(null);
 
   useEffect(() => {
     listConnections()
@@ -146,6 +149,48 @@ export function ConnectionTree() {
     [activateConnection, connections],
   );
 
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, connId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeleteConfirmId(null);
+    setContextMenu({ x: e.clientX, y: e.clientY, connId });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleEditConnection = useCallback(
+    (connId: string) => {
+      const conn = connections.find((c) => c.id === connId);
+      if (conn) {
+        setEditingConfig(conn);
+      }
+      setContextMenu(null);
+    },
+    [connections],
+  );
+
+  const handleEditSave = useCallback(
+    async (config: ConnectionConfig) => {
+      updateConnection(config);
+      const isConnectedConn = connectedIds.has(config.id);
+      if (isConnectedConn) {
+        try {
+          await disconnect(config.id);
+        } catch { /* ignore */ }
+        try {
+          await connect(config);
+        } catch (err) {
+          setConnectionErrors((prev) => ({ ...prev, [config.id]: String(err) }));
+        }
+      }
+      setEditingConfig(null);
+    },
+    [updateConnection, connectedIds],
+  );
+
   const handleCheckboxChange = useCallback(
     (connId: string, database: string) => {
       setActiveConnection(connId);
@@ -191,14 +236,14 @@ export function ConnectionTree() {
             return (
               <li key={conn.id}>
                 <div
-                  className={`tree-item ${conn.id === activeConnectionId ? 'active' : ''}`}
+                  className={`conn-row ${conn.id === activeConnectionId ? 'active' : ''}`}
                   onClick={() => handleSelect(conn.id)}
                   onDoubleClick={() => handleConnect(conn.id)}
                   title={`${conn.name} — ${conn.host}:${conn.port}`}
+                  onContextMenu={(e) => handleContextMenu(e, conn.id)}
                 >
-                  {/* Expand/collapse chevron */}
                   <span
-                    className="toggle-chevron"
+                    className="conn-chevron"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleExpand(conn.id);
@@ -210,80 +255,60 @@ export function ConnectionTree() {
                       ) : (
                         <ChevronRight size={12} />
                       )
+                    ) : null}
+                  </span>
+
+                  <span className={`conn-dot ${isConnected ? 'connected' : ''}`} />
+
+                  <span className="conn-name">
+                    {conn.driver === 'postgres' ? <Database size={11} className="conn-driver-icon" /> : null}
+                    {conn.name}
+                  </span>
+
+                  <span className="conn-actions">
+                    {loadingConnectionId === conn.id ? (
+                      <Loader2 size={12} className="spin" />
+                    ) : !isConnected ? (
+                      <button
+                        className="conn-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleConnect(conn.id);
+                        }}
+                        title="Connect"
+                      >
+                        <Play size={12} />
+                      </button>
+                    ) : null}
+                    {deleteConfirmId === conn.id ? (
+                      <span className="conn-delete-confirm">
+                        <button onClick={(e) => { e.stopPropagation(); handleDelete(conn.id); }}>Yes</button>
+                        <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }}>No</button>
+                      </span>
                     ) : (
-                      <span style={{ width: 12, display: 'inline-block' }} />
+                      <button
+                        className="conn-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirmId(conn.id);
+                        }}
+                        title="Remove"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     )}
                   </span>
-
-                  <span
-                    className={`conn-status-dot ${isConnected ? 'connected' : ''}`}
-                  />
-                  <span className="conn-name">{conn.name}</span>
-                  <span className="conn-host">
-                    {conn.host}:{conn.port}
-                  </span>
-                  {loadingConnectionId === conn.id && (
-                    <Loader2 size={12} className="spin" />
-                  )}
-                  {!(loadingConnectionId === conn.id) && !isConnected && (
-                    <button
-                      className="conn-play"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleConnect(conn.id);
-                      }}
-                      title="Connect (or double-click)"
-                    >
-                      <Play size={12} />
-                    </button>
-                  )}
-                  {deleteConfirmId === conn.id ? (
-                    <div className="delete-confirm">
-                      <button
-                        className="delete-confirm-yes"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(conn.id);
-                        }}
-                      >
-                        Delete
-                      </button>
-                      <button
-                        className="delete-confirm-no"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteConfirmId(null);
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      className="conn-delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirmId(conn.id);
-                      }}
-                      title="Remove"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  )}
                 </div>
                 {connectionErrors[conn.id] && (
-                  <div className="tree-error">{connectionErrors[conn.id]}</div>
+                  <div className="conn-error">{connectionErrors[conn.id]}</div>
                 )}
 
-                {/* Expanded database list with checkboxes */}
                 {isExpanded && isConnected && connDatabases.length > 0 && (
-                  <ul className="tree-sublist">
+                  <ul className="conn-db-list">
                     {connDatabases.map((database) => (
                       <li
                         key={database}
-                        className={`tree-item schema-column db-checkbox-row ${
-                          selected.has(database) ? 'selected' : ''
-                        }`}
+                        className={`conn-db-item ${selected.has(database) ? 'selected' : ''}`}
                         title={database}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -298,7 +323,7 @@ export function ConnectionTree() {
                           onClick={(e) => e.stopPropagation()}
                         />
                         <Database size={12} />
-                        <span className="col-name">{database}</span>
+                        <span>{database}</span>
                       </li>
                     ))}
                   </ul>
@@ -307,6 +332,55 @@ export function ConnectionTree() {
             );
           })}
         </ul>
+      )}
+
+      {contextMenu && (
+        <div
+          className="tab-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="context-menu-item"
+            onClick={() => handleEditConnection(contextMenu.connId)}
+          >
+            <Pencil size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            Edit Connection
+          </button>
+          <div className="context-menu-separator" />
+          <button
+            className="context-menu-item"
+            onClick={() => {
+              handleConnect(contextMenu.connId);
+              closeContextMenu();
+            }}
+            disabled={connectedIds.has(contextMenu.connId)}
+          >
+            <Play size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            Connect
+          </button>
+          <div className="context-menu-separator" />
+          <button
+            className="context-menu-item"
+            style={{ color: "var(--color-error)" }}
+            onClick={() => {
+              setDeleteConfirmId(contextMenu.connId);
+              closeContextMenu();
+            }}
+          >
+            <Trash2 size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            Delete
+          </button>
+        </div>
+      )}
+
+      {editingConfig && (
+        <ConnectionForm
+          onClose={() => setEditingConfig(null)}
+          onConnected={handleEditSave}
+          initial={editingConfig}
+          mode="edit"
+        />
       )}
 
       {showForm && (
@@ -318,3 +392,4 @@ export function ConnectionTree() {
     </div>
   );
 }
+import type { CSSProperties } from 'react';

@@ -1,5 +1,5 @@
 import { useUiStore } from '../../shared/stores/uiStore';
-import { Database, FileText, Settings, Bot, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
+import { Settings, Bot, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
 
 export function LeftRail() {
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
@@ -15,12 +15,7 @@ export function LeftRail() {
       <button className="rail-btn" onClick={() => setSidebarOpen(!sidebarOpen)} title="Toggle sidebar">
         {sidebarOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
       </button>
-      <button className="rail-btn active" title="Connections">
-        <Database size={18} />
-      </button>
-      <button className="rail-btn" title="Query History">
-        <FileText size={18} />
-      </button>
+
       <button className="rail-btn" onClick={() => setSettingsOpen(true)} title="Settings">
         <Settings size={18} />
       </button>

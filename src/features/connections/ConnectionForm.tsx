@@ -7,6 +7,7 @@ interface ConnectionFormProps {
   onClose: () => void;
   onConnected: (config: ConnectionConfig) => void;
   initial?: Partial<ConnectionConfig>;
+  mode?: "create" | "edit";
 }
 
 const DEFAULT_CONFIG: ConnectionConfig = {
@@ -23,6 +24,7 @@ const DEFAULT_CONFIG: ConnectionConfig = {
 };
 
 export function ConnectionForm({ onClose, onConnected, initial }: ConnectionFormProps) {
+  const isEdit = initial?.id != null && initial.id !== "";
   const [config, setConfig] = useState<ConnectionConfig>({
     ...DEFAULT_CONFIG,
     ...initial,
@@ -53,14 +55,17 @@ export function ConnectionForm({ onClose, onConnected, initial }: ConnectionForm
     setConnecting(true);
     setError(null);
     try {
-      const id = crypto.randomUUID();
       const finalConfig: ConnectionConfig = {
         ...config,
-        id,
+        id: isEdit ? config.id : crypto.randomUUID(),
         name: config.name || `${config.host}:${config.port}`,
       };
-      await connect(finalConfig);
-      onConnected(finalConfig);
+      if (isEdit) {
+        onConnected(finalConfig);
+      } else {
+        await connect(finalConfig);
+        onConnected(finalConfig);
+      }
     } catch (e) {
       setError(String(e));
     }
@@ -76,7 +81,7 @@ export function ConnectionForm({ onClose, onConnected, initial }: ConnectionForm
     <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>New Connection</h2>
+          <h2>{isEdit ? "Edit Connection" : "New Connection"}</h2>
           <button className="modal-close" onClick={onClose}>
             <X size={16} />
           </button>
@@ -173,7 +178,7 @@ export function ConnectionForm({ onClose, onConnected, initial }: ConnectionForm
           </button>
           <button className="btn btn-primary" onClick={handleConnect} disabled={connecting}>
             {connecting ? <Loader2 size={14} className="spin" /> : null}
-            Connect
+            {isEdit ? "Save & Reconnect" : "Connect"}
           </button>
         </div>
       </div>
