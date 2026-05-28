@@ -28,7 +28,8 @@ pub fn nl2sql_prompt(context: &AiContextBundle, question: &str) -> String {
     prompt.push_str(&format!("## User Question\n{}\n\n", question));
     prompt.push_str("Analyze the question, then output the SQL in a ```sql code block. Rules:
 - Only use columns that exist in the schemas above.
-- ALL table references must be fully qualified as `database_name`.`table_name`, never bare table names.");
+- ALL table references must be fully qualified (database.table), never bare table names.
+- Use the identifier quoting style appropriate for the database type as specified in the system prompt.");
 
     prompt
 }
@@ -47,13 +48,3 @@ pub fn sql_explain_prompt(sql: &str) -> String {
     )
 }
 
-/// Construct prompt for SQL error fixing
-pub fn sql_fix_prompt(sql: &str, error: &str) -> String {
-    format!(
-        "This SQL query produced an error. Fix it.\n\n\
-        Error: {}\n\n\
-        ```sql\n{}\n```\n\n\
-        Analyze the error, then provide the corrected SQL in a ```sql code block.",
-        error, sql
-    )
-}

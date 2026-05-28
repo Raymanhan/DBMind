@@ -96,10 +96,12 @@ export function SchemaTree() {
     (database: string, table: string) => {
       if (!activeConnectionId) return;
 
-      const sql = `SELECT *\nFROM \`${database}\`.\`${table}\`\nLIMIT 100;`;
+      const isPostgres = activeConn?.driver === 'postgres';
+      const sql = isPostgres
+        ? `SELECT *\nFROM "${table}"\nLIMIT 100;`
+        : `SELECT *\nFROM \`${database}\`.\`${table}\`\nLIMIT 100;`;
       const tabId = crypto.randomUUID();
       const queryId = crypto.randomUUID();
-
       openTab({
         id: tabId,
         title: `${database}.${table}`,

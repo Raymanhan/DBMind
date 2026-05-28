@@ -38,7 +38,7 @@ export function AppLayout() {
       const tabH = 32;
       const handleH = 5;
       const available = el.clientHeight - topBarH - tabH - handleH;
-      const current = editorSplitPx ?? Math.round(available / 2);
+      const current = editorSplitPx ?? Math.round(available * 0.3);
       setEditorSplitPx(Math.max(80, Math.min(available - 80, current + delta)));
     },
     [editorSplitPx, setEditorSplitPx],

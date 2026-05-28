@@ -37,7 +37,10 @@ export function AiInputBar({ conversationId, database, driver, onStreamStart, on
   const [sending, setSending] = useState(false);
   const [mention, setMention] = useState<MentionState>(INITIAL_MENTION);
 
-  const activeConn = useSettingsStore((s) => s.activeConnection());
+  const activeConn = useSettingsStore((s) => {
+    const { connections, activeId } = s.ai;
+    return connections.find((c) => c.id === activeId) ?? connections[0];
+  });
   const addMessage = useChatStore((s) => s.addMessage);
   const pinTable = useChatStore((s) => s.pinTable);
   const activeTabId = useEditorStore((s) => s.activeTabId);

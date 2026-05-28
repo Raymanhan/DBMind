@@ -204,6 +204,13 @@ impl SchemaIndex {
     }
 
 
+    /// Remove all tables for a database (used before full refresh to clear stale entries)
+    pub async fn remove_database_tables(&self, database: &str) {
+        let prefix = format!("{}.", database);
+        let mut tables = self.tables.write().await;
+        tables.retain(|k, _| !k.starts_with(&prefix));
+    }
+
     /// Update a table in-place via callback
     pub async fn update_table<F>(&self, database: &str, table: &str, f: F)
     where

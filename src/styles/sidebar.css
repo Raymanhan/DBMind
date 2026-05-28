@@ -6,13 +6,18 @@
 }
 
 .sidebar-section {
-  flex: 1;
+  flex: 3;
   overflow-y: auto;
   padding: var(--space-sm) 0;
 }
 
 .sidebar-section:first-child {
   border-bottom: 1px solid var(--color-border);
+  flex: 3;
+}
+
+.sidebar-section:last-child {
+  flex: 7;
 }
 
 /* ─── Connection tree ─── */

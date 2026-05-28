@@ -73,7 +73,7 @@ export function ConnectionForm({ onClose, onConnected, initial }: ConnectionForm
   ];
 
   return (
-    <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>New Connection</h2>

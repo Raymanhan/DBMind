@@ -20,7 +20,7 @@ You MUST follow this exact structure for every response:
 
 2. **SQL Query** — Provide the SQL in a fenced code block with the `sql` language tag:
 ```sql
-SELECT ... FROM `database_name`.`table_name` ...
+SELECT ... FROM table_name ...
 ```
 
 3. **Explanation** (optional) — If the SQL is complex, add a short note explaining key logic or potential gotchas.
@@ -158,12 +158,20 @@ pub async fn nl2sql(
     api_url: Option<String>,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
+    driver: Option<String>,
 ) -> Result<String, String> {
     let key = api_key
         .or_else(|| std::env::var("OPENAI_API_KEY").ok())
         .ok_or_else(|| "No API key provided.".to_string())?;
 
     let model = model.unwrap_or_else(|| "gpt-4o-mini".to_string());
+
+    let db_type = driver.as_deref().unwrap_or("mysql");
+    let dialect_note = if db_type == "postgres" {
+        "Database Type: PostgreSQL. Use PostgreSQL syntax only."
+    } else {
+        "Database Type: MySQL. Use MySQL syntax only."
+    };
 
     let context = state
         .ai_engine
@@ -176,7 +184,7 @@ pub async fn nl2sql(
     let messages = vec![
         ChatMessage {
             role: "system".to_string(),
-            content: format!("{}\n\n{}", SYSTEM_PROMPT, database),
+            content: format!("{}\n\n{}\n\nDatabase: {}", SYSTEM_PROMPT, dialect_note, database),
         },
         ChatMessage {
             role: "user".to_string(),
@@ -201,6 +209,7 @@ pub async fn explain_sql(
     api_url: Option<String>,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
+    driver: Option<String>,
 ) -> Result<String, String> {
     let key = api_key
         .or_else(|| std::env::var("OPENAI_API_KEY").ok())
@@ -208,13 +217,20 @@ pub async fn explain_sql(
 
     let model = model.unwrap_or_else(|| "gpt-4o-mini".to_string());
 
+    let db_type = driver.as_deref().unwrap_or("mysql");
+    let dialect_note = if db_type == "postgres" {
+        "Database Type: PostgreSQL. Use PostgreSQL syntax only."
+    } else {
+        "Database Type: MySQL. Use MySQL syntax only."
+    };
+
     let prompt = dbmind_ai::modules::sql_explain_prompt(&sql);
 
     let provider = build_provider(key, model, api_url, max_tokens, temperature);
     let messages = vec![
         ChatMessage {
             role: "system".to_string(),
-            content: SYSTEM_PROMPT.to_string(),
+            content: format!("{}\n\n{}", SYSTEM_PROMPT, dialect_note),
         },
         ChatMessage {
             role: "user".to_string(),

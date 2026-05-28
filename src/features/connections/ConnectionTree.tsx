@@ -84,6 +84,7 @@ export function ConnectionTree() {
         const nextConfig = { ...config, database: database || config.database };
         updateConnection(nextConfig);
         if (nextConfig.database && nextConfig.database !== config.database) {
+          disconnect(config.id).catch(console.error);
           connect(nextConfig).catch(console.error);
         }
         setActiveConnection(config.id);

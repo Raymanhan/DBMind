@@ -34,8 +34,12 @@ function loadPersisted(): AiConfig {
   }
 }
 
+let persistRaf = 0;
 function persist(config: AiConfig) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  cancelAnimationFrame(persistRaf);
+  persistRaf = requestAnimationFrame(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  });
 }
 
 interface SettingsState {

@@ -42,13 +42,13 @@
 }
 
 .editor-pane {
-  flex: 1;
+  flex: 3;
   min-height: 80px;
   overflow: hidden;
 }
 
 .result-pane {
-  flex: 1;
+  flex: 7;
   min-height: 80px;
   overflow: hidden;
 }

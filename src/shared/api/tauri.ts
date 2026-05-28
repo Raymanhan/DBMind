@@ -127,6 +127,7 @@ export async function nl2sql(
   apiUrl?: string,
   maxTokens?: number,
   temperature?: number,
+  driver?: string,
 ): Promise<string> {
   return invoke('nl2sql', {
     database,
@@ -136,6 +137,7 @@ export async function nl2sql(
     apiUrl: apiUrl ?? null,
     maxTokens: maxTokens ?? null,
     temperature: temperature ?? null,
+    driver: driver ?? null,
   });
 }
 
@@ -146,6 +148,7 @@ export async function explainSql(
   apiUrl?: string,
   maxTokens?: number,
   temperature?: number,
+  driver?: string,
 ): Promise<string> {
   return invoke('explain_sql', {
     sql,
@@ -154,6 +157,7 @@ export async function explainSql(
     apiUrl: apiUrl ?? null,
     maxTokens: maxTokens ?? null,
     temperature: temperature ?? null,
+    driver: driver ?? null,
   });
 }
 

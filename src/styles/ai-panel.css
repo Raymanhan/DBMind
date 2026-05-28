@@ -602,7 +602,7 @@
   color: var(--color-text-secondary);
   font-size: 10px;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: border-color var(--transition), color var(--transition);
 }
 
 .ai-model-switcher:hover {

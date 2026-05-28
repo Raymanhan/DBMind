@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::index::SchemaIndex;
 use dbmind_core::errors::SchemaError;
+use dbmind_core::traits::ConnectionManager;
 use dbmind_core::types::*;
 use dbmind_db::manager::ConnectionManagerImpl;
 
@@ -31,6 +32,57 @@ impl SchemaRefresh {
             .await
             .ok_or_else(|| SchemaError::ReadFailed("Connection not found".into()))?;
 
+        // For PG, a connection is bound to one database. If the requested database
+        // doesn't match the current one, create a temporary connection to query it.
+        let effective_conn_id = if driver_type == DatabaseDriver::Postgres {
+            let db_result = self
+                .conn_manager
+                .exec_sql(connection_id, "SELECT current_database()")
+                .await
+                .map_err(|e| SchemaError::ReadFailed(e.to_string()))?;
+            let current = db_result
+                .rows
+                .first()
+                .and_then(|row| row.first())
+                .map(|cell| match cell {
+                    CellValue::String(s) => s.clone(),
+                    CellValue::Null => String::new(),
+                    other => format!("{:?}", other),
+                })
+                .unwrap_or_default();
+
+            if current == database {
+                connection_id.to_string()
+            } else {
+                log::info!(
+                    "Creating temp connection for '{}': current is '{}'",
+                    database, current
+                );
+                let orig_config = self
+                    .conn_manager
+                    .get_config(connection_id)
+                    .await
+                    .ok_or_else(|| SchemaError::ReadFailed("Original config not found".into()))?;
+
+                let temp_id = format!("__tmp_pg_schema__{}_{}", database, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
+                let temp_config = ConnectionConfig {
+                    id: temp_id.clone(),
+                    name: String::new(),
+                    database: Some(database.to_string()),
+                    ..orig_config
+                };
+
+                self.conn_manager
+                    .connect(&temp_config)
+                    .await
+                    .map_err(|e| SchemaError::ReadFailed(format!("Temp connect failed: {}", e)))?;
+
+                temp_id
+            }
+        } else {
+            connection_id.to_string()
+        };
+
         let schema_sql = match driver_type {
             DatabaseDriver::Mysql => mysql_schema_query(database),
             DatabaseDriver::Postgres => postgres_schema_query(database, "public"),
@@ -41,7 +93,7 @@ impl SchemaRefresh {
 
         let result = self
             .conn_manager
-            .exec_sql(connection_id, &schema_sql)
+            .exec_sql(&effective_conn_id, &schema_sql)
             .await
             .map_err(|e| SchemaError::ReadFailed(e.to_string()))?;
 
@@ -51,14 +103,21 @@ impl SchemaRefresh {
             DatabaseDriver::Sqlite => vec![],
         };
 
+        // Clear stale tables before storing refreshed ones
+        self.index.remove_database_tables(database).await;
         for table in tables {
             self.index.store_table(table).await;
         }
 
         // For PG, also read indexes and foreign keys
         if driver_type == DatabaseDriver::Postgres {
-            self.read_pg_indexes(connection_id, database, "public").await.ok();
-            self.read_pg_foreign_keys(connection_id, database, "public").await.ok();
+            self.read_pg_indexes(&effective_conn_id, database, "public").await.ok();
+            self.read_pg_foreign_keys(&effective_conn_id, database, "public").await.ok();
+        }
+
+        // Clean up temporary connection
+        if effective_conn_id != connection_id {
+            let _ = self.conn_manager.disconnect(&effective_conn_id).await;
         }
 
         Ok(())
@@ -68,9 +127,11 @@ impl SchemaRefresh {
     pub async fn incremental_refresh(
         &self,
         _connection_id: &str,
-        _database: &str,
+        database: &str,
         tables: Vec<TableSchema>,
     ) -> Result<(), SchemaError> {
+        // Clear stale tables before storing refreshed ones
+        self.index.remove_database_tables(database).await;
         for table in tables {
             self.index.store_table(table).await;
         }
@@ -205,7 +266,7 @@ fn mysql_schema_query(database: &str) -> String {
     )
 }
 
-fn postgres_schema_query(database: &str, schema: &str) -> String {
+fn postgres_schema_query(_database: &str, schema: &str) -> String {
     format!(
         "SELECT \
          c.table_name, \
@@ -239,10 +300,9 @@ fn postgres_schema_query(database: &str, schema: &str) -> String {
              ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema \
            WHERE tc.constraint_type = 'UNIQUE' \
          ) uk ON uk.table_name = c.table_name AND uk.column_name = c.column_name AND uk.table_schema = c.table_schema \
-         WHERE c.table_schema = '{schema}' AND c.table_catalog = '{db}' \
+         WHERE c.table_schema = '{schema}' \
          ORDER BY c.table_name, c.ordinal_position",
-        schema = sanitize_sql_string(schema),
-        db = sanitize_sql_string(database)
+        schema = sanitize_sql_string(schema)
     )
 }
 

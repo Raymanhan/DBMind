@@ -43,48 +43,6 @@ impl AiContextEngine {
             database: database.to_string(),
         }
     }
-
-    /// Construct the final prompt for the LLM
-    pub fn construct_sql_prompt(&self, context: &AiContextBundle, user_question: &str) -> String {
-        let mut prompt = String::from("You are DBMind, an AI SQL assistant.\n\n");
-
-        prompt.push_str(&format!("Database: {}\n\n", context.database));
-
-        if !context.schema.tables.is_empty() {
-            prompt.push_str("Schema:\n");
-            for table in &context.schema.tables {
-                prompt.push_str(&format!(
-                    "  {} ({} rows)",
-                    table.name,
-                    table.row_count.unwrap_or(0)
-                ));
-                if let Some(ref comment) = table.comment {
-                    prompt.push_str(&format!(" - {}", comment));
-                }
-                prompt.push('\n');
-                for col in &table.columns {
-                    prompt.push_str(&format!("    {}: {}", col.name, col.data_type));
-                    if let Some(ref comment) = col.comment {
-                        prompt.push_str(&format!(" ({})", comment));
-                    }
-                    prompt.push('\n');
-                }
-            }
-            prompt.push('\n');
-        }
-
-        if let Some(ref sql) = context.current_sql {
-            prompt.push_str(&format!("Current SQL:\n{}\n\n", sql));
-        }
-
-        if let Some(ref err) = context.error {
-            prompt.push_str(&format!("Error:\n{}\n\n", err));
-        }
-
-        prompt.push_str(&format!("Question: {}\n\nAnswer:", user_question));
-
-        prompt
-    }
 }
 
 pub struct AiContextBundle {

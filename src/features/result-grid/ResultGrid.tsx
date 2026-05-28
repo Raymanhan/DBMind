@@ -19,13 +19,26 @@ function ExplainSummary({ result }: { result: QueryResultMeta }) {
       setRows([]);
       return;
     }
-    fetchCells(result.query_id, 0, Math.min(result.row_count ?? 0, 20), 0, result.columns.length)
+    fetchCells(result.query_id, 0, Math.min(result.row_count ?? 0, 50), 0, result.columns.length)
       .then((block) => setRows(block.rows))
       .catch(() => setRows([]));
   }, [result]);
 
   if (rows.length === 0) return null;
 
+  // Detect PostgreSQL EXPLAIN: single column named "QUERY PLAN"
+  const colNames = result.columns.map((c) => c.name.toLowerCase());
+  const isPgExplain = colNames.length === 1 && (colNames[0] === 'query plan' || colNames[0] === 'query_plan');
+
+  if (isPgExplain) {
+    return (
+      <pre className="explain-text">
+        {rows.map((row) => row[0] ? cellText(row[0]) : '').join('\n')}
+      </pre>
+    );
+  }
+
+  // MySQL-style structured EXPLAIN
   const indexByName = new Map(result.columns.map((column, index) => [column.name.toLowerCase(), index]));
   const pick = (row: CellValue[], name: string) => {
     const index = indexByName.get(name.toLowerCase());

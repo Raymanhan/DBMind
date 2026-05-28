@@ -9,18 +9,18 @@ use crate::connection::{Driver, QueryResult};
 
 pub struct PostgresDriver {
     client: Mutex<Option<tokio_postgres::Client>>,
-    _handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     schema_name: std::sync::OnceLock<String>,
     cancel_tokens: Mutex<HashMap<String, tokio_postgres::CancelToken>>,
+    ssl_enabled: std::sync::Mutex<bool>,
 }
 
 impl PostgresDriver {
     pub fn new() -> Self {
         Self {
             client: Mutex::new(None),
-            _handle: Mutex::new(None),
             schema_name: std::sync::OnceLock::new(),
             cancel_tokens: Mutex::new(HashMap::new()),
+            ssl_enabled: std::sync::Mutex::new(false),
         }
     }
 }
@@ -41,38 +41,62 @@ fn build_column_meta(col: &tokio_postgres::Column) -> ColumnMeta {
 #[async_trait]
 impl Driver for PostgresDriver {
     async fn connect(&self, config: &ConnectionConfig) -> Result<(), DbError> {
-        let mut params: Vec<(&str, String)> = vec![
-            ("host", config.host.clone()),
-            ("port", config.port.to_string()),
-            ("user", config.username.clone()),
-        ];
+        use tokio_postgres::config::Config as PgConfig;
 
+        log::info!("Connecting to PostgreSQL: host={}, port={}, user={}, db={}, ssl={}",
+            config.host, config.port, config.username,
+            config.database.as_deref().unwrap_or("postgres"), config.ssl);
+
+        let mut pg_config = PgConfig::new();
+        pg_config.host(&config.host);
+        pg_config.port(config.port);
+        pg_config.user(&config.username);
         if let Some(ref pw) = config.password {
-            params.push(("password", pw.clone()));
+            pg_config.password(pw.as_bytes());
         }
+        pg_config.dbname(config.database.as_deref().unwrap_or("postgres"));
 
-        let dbname = config.database.as_deref().unwrap_or("postgres");
-        params.push(("dbname", dbname.to_string()));
+        let client = if config.ssl {
+            pg_config.ssl_mode(tokio_postgres::config::SslMode::Require);
 
-        if config.ssl {
-            params.push(("sslmode", "require".to_string()));
-        }
+            let tls = postgres_openssl::MakeTlsConnector::new(
+                openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls())
+                    .map_err(|e| DbError::ConnectionFailed(format!("TLS init failed: {}", e)))?
+                    .build()
+            );
 
-        let conn_str = params
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect::<Vec<_>>()
-            .join(" ");
+            let (client, connection) = pg_config
+                .connect(tls)
+                .await
+                .map_err(|e| {
+                    log::error!("PostgreSQL connection error: {}", e);
+                    DbError::ConnectionFailed(format!("{} (host={}, port={})", e, config.host, config.port))
+                })?;
 
-        let (client, connection) = tokio_postgres::connect(&conn_str, tokio_postgres::NoTls)
-            .await
-            .map_err(|e| DbError::ConnectionFailed(e.to_string()))?;
+            tokio::spawn(async move {
+                if let Err(e) = connection.await {
+                    log::error!("PostgreSQL connection error: {}", e);
+                }
+            });
+            client
+        } else {
+            pg_config.ssl_mode(tokio_postgres::config::SslMode::Disable);
 
-        let handle = tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                log::error!("PostgreSQL connection error: {}", e);
-            }
-        });
+            let (client, connection) = pg_config
+                .connect(tokio_postgres::NoTls)
+                .await
+                .map_err(|e| {
+                    log::error!("PostgreSQL connection error: {}", e);
+                    DbError::ConnectionFailed(format!("{} (host={}, port={})", e, config.host, config.port))
+                })?;
+
+            tokio::spawn(async move {
+                if let Err(e) = connection.await {
+                    log::error!("PostgreSQL connection error: {}", e);
+                }
+            });
+            client
+        };
 
         // Test the connection
         client
@@ -80,13 +104,19 @@ impl Driver for PostgresDriver {
             .await
             .map_err(|e| DbError::ConnectionFailed(format!("Connection test failed: {}", e)))?;
 
+        // If there's an existing connection, clean it up first
+        {
+        }
+
         let mut stored_client = self.client.lock().await;
         *stored_client = Some(client);
-        let mut stored_handle = self._handle.lock().await;
-        *stored_handle = Some(handle);
+        // Note: connection task handle was already spawned above;
+        // we intentionally don't store it since tokio_postgres Client
+        // manages the connection lifecycle internally.
 
         let db_name = config.database.clone().unwrap_or_else(|| "public".to_string());
         let _ = self.schema_name.set(db_name);
+        *self.ssl_enabled.lock().unwrap() = config.ssl;
 
         Ok(())
     }
@@ -94,12 +124,19 @@ impl Driver for PostgresDriver {
     async fn disconnect(&self) -> Result<(), DbError> {
         let mut client_guard = self.client.lock().await;
         if let Some(client) = client_guard.take() {
-            let _ = client.execute("SELECT 1", &[]).await; // best-effort
+            let token = client.cancel_token();
+            let ssl = *self.ssl_enabled.lock().unwrap();
+            if ssl {
+                let tls = postgres_openssl::MakeTlsConnector::new(
+                    openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls())
+                        .map_err(|e| DbError::DriverError(format!("TLS init failed: {}", e)))?
+                        .build()
+                );
+                let _ = token.cancel_query(tls).await;
+            } else {
+                let _ = token.cancel_query(tokio_postgres::NoTls).await;
+            }
             drop(client);
-        }
-        let mut handle_guard = self._handle.lock().await;
-        if let Some(h) = handle_guard.take() {
-            h.abort();
         }
         Ok(())
     }
@@ -192,9 +229,21 @@ impl Driver for PostgresDriver {
         let token = self.cancel_tokens.lock().await.remove(query_id);
         if let Some(ct) = token {
             log::info!("Cancelling PostgreSQL query {}", query_id);
-            ct.cancel_query(tokio_postgres::NoTls)
-                .await
-                .map_err(|e| DbError::DriverError(e.to_string()))?;
+            let ssl = *self.ssl_enabled.lock().unwrap();
+            if ssl {
+                let tls = postgres_openssl::MakeTlsConnector::new(
+                    openssl::ssl::SslConnector::builder(openssl::ssl::SslMethod::tls())
+                        .map_err(|e| DbError::DriverError(format!("TLS init failed: {}", e)))?
+                        .build()
+                );
+                ct.cancel_query(tls)
+                    .await
+                    .map_err(|e| DbError::DriverError(e.to_string()))?;
+            } else {
+                ct.cancel_query(tokio_postgres::NoTls)
+                    .await
+                    .map_err(|e| DbError::DriverError(e.to_string()))?;
+            }
         } else {
             log::warn!("No cancel token found for PostgreSQL query {}", query_id);
         }

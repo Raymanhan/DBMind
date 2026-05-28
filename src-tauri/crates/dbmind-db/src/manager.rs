@@ -11,12 +11,14 @@ use dbmind_core::types::{ConnectionConfig, DatabaseDriver};
 /// Manages all database connections
 pub struct ConnectionManagerImpl {
     connections: RwLock<HashMap<String, Box<dyn Driver>>>,
+    configs: RwLock<HashMap<String, ConnectionConfig>>,
 }
 
 impl ConnectionManagerImpl {
     pub fn new() -> Self {
         Self {
             connections: RwLock::new(HashMap::new()),
+            configs: RwLock::new(HashMap::new()),
         }
     }
 
@@ -32,6 +34,12 @@ impl ConnectionManagerImpl {
     pub async fn driver_type(&self, connection_id: &str) -> Option<DatabaseDriver> {
         let conns = self.connections.read().await;
         conns.get(connection_id).map(|d| d.driver_type())
+    }
+
+    /// Get the stored config for a connection
+    pub async fn get_config(&self, connection_id: &str) -> Option<ConnectionConfig> {
+        let configs = self.configs.read().await;
+        configs.get(connection_id).cloned()
     }
 
     /// Execute SQL on a specific connection — used by the QueryExecutor
@@ -66,6 +74,7 @@ impl ConnectionManager for ConnectionManagerImpl {
         driver.connect(config).await?;
 
         let id = config.id.clone();
+        self.configs.write().await.insert(id.clone(), config.clone());
         let mut conns = self.connections.write().await;
         conns.insert(id.clone(), driver);
 
@@ -73,6 +82,7 @@ impl ConnectionManager for ConnectionManagerImpl {
     }
 
     async fn disconnect(&self, connection_id: &str) -> Result<(), DbError> {
+        self.configs.write().await.remove(connection_id);
         let mut conns = self.connections.write().await;
         if let Some(driver) = conns.remove(connection_id) {
             driver.disconnect().await?;
