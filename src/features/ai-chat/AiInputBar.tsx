@@ -4,6 +4,7 @@ import { useEditorStore } from '../../shared/stores/editorStore';
 import { useSettingsStore } from '../../shared/stores/settingsStore';
 import { useChatStore } from '../../shared/stores/chatStore';
 import { aiChat, generateDdl, extractTables, searchAllTables } from '../../shared/api/tauri';
+import { fuzzyMatch } from '../../shared/utils/fuzzy';
 import { extractTableMentions } from '../../shared/sqlTools';
 import { AiTableMention } from './AiTableMention';
 import type { CrossDbTableBrief } from '../../shared/api/types';
@@ -14,6 +15,7 @@ interface Props {
   driver?: string;
   onStreamStart: () => void;
   onStreamEnd: () => void;
+  schemaVersion: number;
 }
 
 interface MentionState {
@@ -32,7 +34,7 @@ const INITIAL_MENTION: MentionState = {
   activeIndex: 0,
 };
 
-export function AiInputBar({ conversationId, database, driver, onStreamStart, onStreamEnd }: Props) {
+export function AiInputBar({ conversationId, database, driver, onStreamStart, onStreamEnd, schemaVersion }: Props) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [mention, setMention] = useState<MentionState>(INITIAL_MENTION);
@@ -47,7 +49,6 @@ export function AiInputBar({ conversationId, database, driver, onStreamStart, on
   const activeTab = useEditorStore((s) => s.tabs.find((t) => t.id === activeTabId));
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const convIdRef = useRef(conversationId);
   convIdRef.current = conversationId;
 
@@ -58,7 +59,6 @@ export function AiInputBar({ conversationId, database, driver, onStreamStart, on
   sendingRef.current = sending;
 
   useEffect(() => {
-    if (!database) return;
     let cancelled = false;
     searchAllTables('')
       .then((tables) => {
@@ -68,7 +68,7 @@ export function AiInputBar({ conversationId, database, driver, onStreamStart, on
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [database]);
+  }, [database, schemaVersion]);
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
@@ -136,17 +136,6 @@ export function AiInputBar({ conversationId, database, driver, onStreamStart, on
         activeIndex: 0,
       }));
 
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        searchAllTables(query)
-          .then((tables) => {
-            setMention((prev) => {
-              if (!prev.active) return prev;
-              return { ...prev, tables };
-            });
-          })
-          .catch(() => {});
-      }, 150);
     },
     [],
   );
@@ -172,7 +161,7 @@ export function AiInputBar({ conversationId, database, driver, onStreamStart, on
       const insertText = `@${table.database}.${table.name} `;
       const newText = `${before}${insertText}${after}`;
       setInput(newText);
-      setMention(INITIAL_MENTION);
+      setMention((prev) => ({ ...INITIAL_MENTION, tables: prev.tables }));
 
       requestAnimationFrame(() => {
         if (textareaRef.current) {
@@ -220,7 +209,7 @@ export function AiInputBar({ conversationId, database, driver, onStreamStart, on
         }
         if (e.key === 'Escape') {
           e.preventDefault();
-          setMention(INITIAL_MENTION);
+          setMention((prev) => ({ ...INITIAL_MENTION, tables: prev.tables }));
           return;
         }
       }
@@ -242,7 +231,7 @@ export function AiInputBar({ conversationId, database, driver, onStreamStart, on
 
     setInput('');
     setSending(true);
-    setMention(INITIAL_MENTION);
+    setMention((prev) => ({ ...INITIAL_MENTION, tables: prev.tables }));
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -350,11 +339,18 @@ export function AiInputBar({ conversationId, database, driver, onStreamStart, on
 
 function getFilteredTables(tables: CrossDbTableBrief[], query: string): CrossDbTableBrief[] {
   if (!query) return tables.slice(0, 50);
-  const lower = query.toLowerCase();
-  return tables.filter(
-    (t) =>
-      t.name.toLowerCase().includes(lower) ||
-      t.database.toLowerCase().includes(lower) ||
-      (t.comment?.toLowerCase().includes(lower) ?? false),
-  ).slice(0, 50);
+  return tables
+    .map((t) => {
+      const nameResult = fuzzyMatch(t.name, query);
+      const dbResult = fuzzyMatch(t.database, query);
+      const commentResult = t.comment ? fuzzyMatch(t.comment, query) : null;
+      const best = [nameResult, dbResult, commentResult]
+        .filter(Boolean)
+        .sort((a, b) => b!.score - a!.score)[0];
+      return { table: t, score: best ? best.score + (nameResult ? 10 : 0) : -1 };
+    })
+    .filter((s) => s.score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 50)
+    .map((s) => s.table);
 }

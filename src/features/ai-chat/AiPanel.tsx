@@ -34,6 +34,7 @@ export function AiPanel() {
   const streamBuffer = useRef<string>('');
   const streamingConvId = useRef<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [schemaVersion, setSchemaVersion] = useState(0);
 
   const activeConv = conversations.find((c) => c.id === activeConversationId);
   const database = activeConv?.database ?? activeTab?.database ?? activeConnection?.database ?? '';
@@ -50,6 +51,9 @@ export function AiPanel() {
       streamBuffer.current += token;
       updateLastAssistantMessage(convId, streamBuffer.current);
     }, [updateLastAssistantMessage]),
+    onSchemaRefreshed: useCallback(() => {
+      setSchemaVersion((v) => v + 1);
+    }, []),
   });
 
   useEffect(() => {
@@ -150,6 +154,7 @@ export function AiPanel() {
           driver={activeConv?.driver ?? activeConnection?.driver}
           onStreamStart={handleStreamStart}
           onStreamEnd={handleStreamEnd}
+          schemaVersion={schemaVersion}
         />
       )}
     </div>

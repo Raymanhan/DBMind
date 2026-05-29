@@ -261,7 +261,7 @@ export function ConnectionTree() {
                   <span className={`conn-dot ${isConnected ? 'connected' : ''}`} />
 
                   <span className="conn-name">
-                    {conn.driver === 'postgres' ? <Database size={11} className="conn-driver-icon" /> : null}
+                    <Database size={11} className="conn-driver-icon" />
                     {conn.name}
                   </span>
 

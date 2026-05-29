@@ -1,6 +1,6 @@
 {
   "name": "dbmind",
-  "version": "0.2.9",
+  "version": "0.3.0",
   "description": "AI Native SQL Workspace",
   "author": "DBMind Team",
   "type": "module",

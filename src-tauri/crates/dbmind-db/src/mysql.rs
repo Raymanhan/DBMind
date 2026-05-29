@@ -63,6 +63,30 @@ fn build_column_meta(col: &mysql_async::Column) -> ColumnMeta {
     }
 }
 
+/// Strip leading line comments (--) and block comments (/* */) from SQL.
+fn strip_leading_comments(sql: &str) -> &str {
+    let mut s = sql.trim_start();
+    loop {
+        if s.starts_with("--") {
+            if let Some(pos) = s.find('\n') {
+                s = &s[pos + 1..];
+                s = s.trim_start();
+            } else {
+                return "";
+            }
+        } else if s.starts_with("/*") {
+            if let Some(pos) = s.find("*/") {
+                s = &s[pos + 2..];
+                s = s.trim_start();
+            } else {
+                return "";
+            }
+        } else {
+            return s;
+        }
+    }
+}
+
 #[async_trait]
 impl Driver for MysqlDriver {
     async fn connect(&self, config: &ConnectionConfig) -> Result<(), DbError> {
@@ -123,7 +147,7 @@ impl Driver for MysqlDriver {
                 .insert(query_id.to_string(), conn.id());
         }
 
-        let trimmed = sql.trim().to_uppercase();
+        let trimmed = strip_leading_comments(sql).trim().to_uppercase();
         let is_query = trimmed.starts_with("SELECT")
             || trimmed.starts_with("WITH")
             || trimmed.starts_with("SHOW")
